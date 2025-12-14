@@ -2,9 +2,9 @@
 
 **Purpose**: Track implementation of a modular financial document parsing feature compatible with both MAP05 and other_branch.
 
-**Current State**: Phase 2 complete. Ready for Phase 3 (AI Tools Layer).
+**Current State**: Phase 3 complete. Ready for Phase 4 (Agent Layer).
 
-**Last Updated**: 2024-12-14
+**Last Updated**: 2025-12-14
 
 ---
 
@@ -56,24 +56,24 @@
 
 ---
 
-## Phase 3: AI Tools Layer
+## Phase 3: AI Tools Layer ✅
 
 ### 3.1 Extraction Tool
-- [ ] Create `src/ai/tools/extract-financial-data.ts`
-- [ ] Define Zod input schema (parsed content, document type hints)
-- [ ] Implement extraction logic using Claude
-- [ ] Return structured line items with confidence scores
+- [x] Create `src/ai/tools/extract-financial-data.ts`
+- [x] Define Zod input schema (parsed content, document type hints)
+- [x] Implement extraction logic using Claude
+- [x] Return structured line items with confidence scores
 
 ### 3.2 Categorization Tool
-- [ ] Create `src/ai/tools/categorize-line-items.ts`
-- [ ] Define categories: revenue, expenses, one-time adjustments
-- [ ] Implement reasoning capture for audit trail
-- [ ] Support custom category mappings
+- [x] Create `src/ai/tools/categorize-line-items.ts`
+- [x] Define categories: revenue, expenses, one-time adjustments
+- [x] Implement reasoning capture for audit trail
+- [x] Support custom category mappings
 
 ### 3.3 Tool Tests
-- [ ] Create `src/ai/tools/extract-financial-data.test.ts`
-- [ ] Create `src/ai/tools/categorize-line-items.test.ts`
-- [ ] Mock Claude API for deterministic testing
+- [x] Create `src/ai/tools/extract-financial-data.test.ts`
+- [x] Create `src/ai/tools/categorize-line-items.test.ts`
+- [x] Mock Claude API for deterministic testing
 
 ---
 
@@ -212,7 +212,7 @@
 | `src/parsers/*` | ✅ Complete | File parsers (PDF, Excel, CSV, Image) |
 | `src/ai/config.ts` | ✅ Complete | Claude config |
 | `src/ai/prompts/*` | ✅ Complete | System prompts |
-| `src/ai/tools/*` | Empty | AI tools |
+| `src/ai/tools/*` | ✅ Complete | AI tools (extraction, categorization) |
 | `src/agent/*` | Empty | Extraction agent |
 | `src/export/*` | Empty | Excel generation |
 | `src/lib/*` | ✅ Complete | Utilities (errors, constants, utils) |
@@ -279,3 +279,4 @@ LOG_LEVEL=debug
 |------|-------|--------|-------|
 | 2024-12-13 | Phase 1 | ✅ Passed | AI config, prompts, utilities reviewed. Fixed exports and formatCurrency edge case. |
 | 2024-12-14 | Phase 2 | ✅ Passed | Parser layer complete. 4 parsers (PDF, Excel, CSV, Image) with 45 passing tests. Used Claude vision for PDFs/images, ExcelJS/PapaParse for structured files. Fixed AI SDK v5 `maxOutputTokens` param and safe ArrayBuffer handling. |
+| 2025-12-14 | Phase 3 | ✅ Passed | AI tools layer complete. 2 tools (extractFinancialData, categorizeLineItems) with 29 passing tests. Used Vercel AI SDK `tool()` and `generateObject()` for structured extraction. Fixed AI SDK v5 `inputSchema` (not `parameters`) and model type compatibility. Total: 74 tests passing. |
