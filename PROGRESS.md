@@ -2,9 +2,9 @@
 
 **Purpose**: Track implementation of a modular financial document parsing feature compatible with both MAP05 and other_branch.
 
-**Current State**: Phase 1 complete and reviewed. Ready for Phase 2 (Parser Layer).
+**Current State**: Phase 2 complete. Ready for Phase 3 (AI Tools Layer).
 
-**Last Updated**: 2024-12-13
+**Last Updated**: 2024-12-14
 
 ---
 
@@ -33,26 +33,26 @@
 
 ---
 
-## Phase 2: Parser Layer
+## Phase 2: Parser Layer ✅
 
 ### 2.1 Parser Factory
-- [ ] Create `src/parsers/index.ts` - Parser factory with file type detection
-- [ ] Implement `getParser(fileType)` function
-- [ ] Support MIME type and extension-based detection
+- [x] Create `src/parsers/index.ts` - Parser factory with file type detection
+- [x] Implement `getParser(fileType)` function
+- [x] Support MIME type and extension-based detection
 
 ### 2.2 Individual Parsers
-- [ ] Create `src/parsers/pdf-parser.ts` - Claude vision for PDF text/table extraction
-- [ ] Create `src/parsers/excel-parser.ts` - ExcelJS for .xlsx/.xls files
-- [ ] Create `src/parsers/csv-parser.ts` - PapaParse for CSV files
-- [ ] Create `src/parsers/image-parser.ts` - Claude vision for image OCR
-- [ ] Implement consistent output format across all parsers
+- [x] Create `src/parsers/pdf-parser.ts` - Claude vision for PDF text/table extraction
+- [x] Create `src/parsers/excel-parser.ts` - ExcelJS for .xlsx/.xls files
+- [x] Create `src/parsers/csv-parser.ts` - PapaParse for CSV files
+- [x] Create `src/parsers/image-parser.ts` - Claude vision for image OCR
+- [x] Implement consistent output format across all parsers
 
 ### 2.3 Parser Tests
-- [ ] Create `src/parsers/pdf-parser.test.ts`
-- [ ] Create `src/parsers/excel-parser.test.ts`
-- [ ] Create `src/parsers/csv-parser.test.ts`
-- [ ] Create `src/parsers/image-parser.test.ts`
-- [ ] Add test fixtures for each file type
+- [x] Create `src/parsers/pdf-parser.test.ts`
+- [x] Create `src/parsers/excel-parser.test.ts`
+- [x] Create `src/parsers/csv-parser.test.ts`
+- [x] Create `src/parsers/image-parser.test.ts`
+- [x] Add test fixtures for each file type (inline fixtures in tests)
 
 ---
 
@@ -135,17 +135,21 @@
 
 ## Phase 7: Integration - MAP05
 
-### 7.1 AI Tool Integration
+> **NOTE: FOR DOCUMENTATION ONLY**
+>
+> MAP05 is a separate production application. The tasks below document HOW to integrate PARSE-N-FILL into MAP05, but the actual integration work will be done in the MAP05 repository, NOT here. Do NOT edit files in `/mnt/c/PARSE-N-FILL/MAP05/`.
+
+### 7.1 AI Tool Integration (in MAP05 repo)
 - [ ] Create tool in MAP05: `src/lib/ai/tools/parse-financial-document.ts`
 - [ ] Import parse-n-fill module
 - [ ] Map to existing file infrastructure (uploadedFiles table)
 
-### 7.2 API Route (optional)
+### 7.2 API Route (optional, in MAP05 repo)
 - [ ] Create `src/app/api/parse-financial/route.ts` in MAP05
 - [ ] Use existing auth (Supabase)
 - [ ] Leverage existing file storage
 
-### 7.3 Integration Tests
+### 7.3 Integration Tests (in MAP05 repo)
 - [ ] Test with MAP05's uploaded files
 - [ ] Verify data flows to POI/table system
 
@@ -153,21 +157,25 @@
 
 ## Phase 8: Integration - other_branch
 
-### 8.1 API Route
+> **NOTE: FOR DOCUMENTATION ONLY**
+>
+> other_branch is a separate production application. The tasks below document HOW to integrate PARSE-N-FILL into other_branch, but the actual integration work will be done in the other_branch repository, NOT here. Do NOT edit files in `/mnt/c/PARSE-N-FILL/other_branch/`.
+
+### 8.1 API Route (in other_branch repo)
 - [ ] Create `src/app/api/parse-document/route.ts` in other_branch
 - [ ] Use Clerk auth (`auth()` from `@clerk/nextjs/server`)
 - [ ] Accept file upload or session file reference
 
-### 8.2 Type Mapping
+### 8.2 Type Mapping (in other_branch repo)
 - [ ] Map DirectCapitalizationRateModel -> RevenueStream[]
 - [ ] Map DirectCapitalizationRateModel -> ExpenseRow[]
 - [ ] Map to PropertyData if property info detected
 
-### 8.3 Session Integration
+### 8.3 Session Integration (in other_branch repo)
 - [ ] Update session with parsed data via `/api/sessions/drafts/[id]`
 - [ ] Pre-populate Zustand store from parsed results
 
-### 8.4 Integration Tests
+### 8.4 Integration Tests (in other_branch repo)
 - [ ] Test with other_branch session workflow
 - [ ] Verify financial calculations work with parsed data
 
@@ -201,7 +209,7 @@
 | `src/schemas/direct-cap-schema.ts` | ✅ Complete | Zod validation |
 | `src/api/parse-document.ts` | Stub | Main parse API |
 | `src/api/export-excel.ts` | Stub | Excel export API |
-| `src/parsers/*` | Empty | File parsers |
+| `src/parsers/*` | ✅ Complete | File parsers (PDF, Excel, CSV, Image) |
 | `src/ai/config.ts` | ✅ Complete | Claude config |
 | `src/ai/prompts/*` | ✅ Complete | System prompts |
 | `src/ai/tools/*` | Empty | AI tools |
@@ -209,20 +217,20 @@
 | `src/export/*` | Empty | Excel generation |
 | `src/lib/*` | ✅ Complete | Utilities (errors, constants, utils) |
 
-### MAP05 Integration Points
+### MAP05 Reference Files (READ-ONLY - Do NOT edit)
 | File | Purpose |
 |------|---------|
-| `src/lib/ai/tools/index.ts` | Tool factory - add new tool here |
-| `src/lib/file-parser.ts` | Existing parsing - reference patterns |
-| `src/app/actions/chat.ts` | Agent orchestration |
-| `src/db/schema.ts` | uploadedFiles table |
+| `src/lib/ai/tools/index.ts` | Reference: Tool factory pattern |
+| `src/lib/file-parser.ts` | Reference: File parsing patterns |
+| `src/app/actions/chat.ts` | Reference: Agent orchestration |
+| `src/db/schema.ts` | Reference: uploadedFiles table schema |
 
-### other_branch Integration Points
+### other_branch Reference Files (READ-ONLY - Do NOT edit)
 | File | Purpose |
 |------|---------|
-| `src/stores/types.ts` | RevenueStream, ExpenseRow types |
-| `src/lib/services/financial-calculations.service.ts` | Post-parse calculations |
-| `src/app/api/sessions/drafts/[id]/route.ts` | Session update pattern |
+| `src/stores/types.ts` | Reference: RevenueStream, ExpenseRow types |
+| `src/lib/services/financial-calculations.service.ts` | Reference: Financial calculation patterns |
+| `src/app/api/sessions/drafts/[id]/route.ts` | Reference: Session update pattern |
 
 ---
 
@@ -254,10 +262,14 @@ LOG_LEVEL=debug
 
 ## Notes
 
+> **IMPORTANT: MAP05 and other_branch are READ-ONLY reference projects.**
+> Do NOT edit files in those directories. Study their patterns, but implement all code in PARSE-N-FILL only.
+
 - MAP05 uses GPT-5.1 for file parsing; parse-n-fill uses Claude for financial extraction
 - other_branch has no document parsing - parse-n-fill fills this gap completely
 - Both apps use Vercel AI SDK - consistent patterns available
 - Zod validation is standard across all three codebases
+- Integration phases (7 & 8) document HOW to integrate, not tasks to do here
 
 ---
 
@@ -266,3 +278,4 @@ LOG_LEVEL=debug
 | Date | Phase | Status | Notes |
 |------|-------|--------|-------|
 | 2024-12-13 | Phase 1 | ✅ Passed | AI config, prompts, utilities reviewed. Fixed exports and formatCurrency edge case. |
+| 2024-12-14 | Phase 2 | ✅ Passed | Parser layer complete. 4 parsers (PDF, Excel, CSV, Image) with 45 passing tests. Used Claude vision for PDFs/images, ExcelJS/PapaParse for structured files. Fixed AI SDK v5 `maxOutputTokens` param and safe ArrayBuffer handling. |

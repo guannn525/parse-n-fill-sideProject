@@ -113,6 +113,16 @@ export {
 export { parseDocument, type ParseDocumentRequest, type ParseDocumentResponse } from "./api";
 export { exportToExcel, type ExportExcelRequest } from "./api";
 
+// Parser Layer
+export { parseFile, getParser, canParse } from "./parsers";
+export type {
+  ParsedContent,
+  ParsedContentMetadata,
+  ParserInput,
+  FileParser,
+  ExcelSheetData,
+} from "./parsers";
+
 // Utilities
 export {
   // Error classes

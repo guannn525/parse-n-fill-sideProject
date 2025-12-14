@@ -249,7 +249,26 @@ docs(readme): update API examples
 
 ## Reference Projects
 
+> **IMPORTANT: READ-ONLY REFERENCES**
+>
+> The following projects are included **FOR REFERENCE ONLY**. Do NOT modify, edit, or commit changes to these codebases. Any changes made to MAP05 or other_branch will be wasted effort - they are separate production applications with their own development workflows.
+
 This project adapts patterns from:
 
-- **MAP05** (`/mnt/c/PARSE-N-FILL/MAP05/`) - Primary reference for AI tools, file parsing
-- **other_branch** (`/mnt/c/PARSE-N-FILL/other_branch/`) - Financial calculation patterns
+- **MAP05** (`/mnt/c/PARSE-N-FILL/MAP05/`) - Reference for AI tools, file parsing patterns
+  - Study: `src/lib/file-parser.ts`, `src/lib/ai/tools/`
+  - DO NOT EDIT - read-only reference
+
+- **other_branch** (`/mnt/c/PARSE-N-FILL/other_branch/`) - Reference for financial calculation patterns
+  - Study: `src/stores/types.ts`, `src/lib/services/`
+  - DO NOT EDIT - read-only reference
+
+When implementing features in PARSE-N-FILL, you may:
+- Read and study patterns from these projects
+- Copy/adapt code snippets into PARSE-N-FILL
+- Reference their architecture decisions
+
+You must NOT:
+- Edit files in MAP05/ or other_branch/
+- Create commits in those directories
+- Run their dev servers or tests (unless explicitly asked)
