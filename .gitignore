@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Cache
+.cache/
+.eslintcache
+.turbo/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Package manager lock files (keep one)
+# yarn.lock
+# pnpm-lock.yaml
+
+# Debug
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids/
+lib-cov/
+
+# Optional: Large test fixtures
+# fixtures/large/
+
+# Secrets (should never be committed)
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Reference projects (external dependencies for development reference only)
+MAP05/
+other_branch/
+parse-n-fill-sideProject/

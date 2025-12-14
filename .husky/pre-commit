@@ -1,0 +1,45 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# 0. Uncommitted files warning - catch files that might have been missed
+echo "⚠️  Checking for uncommitted files..."
+UNSTAGED=$(git diff --name-only 2>/dev/null | wc -l)
+UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l)
+
+if [ "$UNSTAGED" -gt 0 ] || [ "$UNTRACKED" -gt 0 ]; then
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "⚠️  WARNING: Uncommitted files detected!"
+  echo ""
+  echo "  Unstaged (modified): $UNSTAGED files"
+  echo "  Untracked (new):     $UNTRACKED files"
+  echo ""
+  echo "Files not being committed:"
+  git status --short | grep -E '^(\?\?| M| D)' || true
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "⚠️  Is this intentional (partial commit)?"
+  echo "⚠️  Or did you forget to add these files?"
+  echo ""
+  echo "Proceeding with commit in 2 seconds... (Ctrl+C to cancel)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  sleep 2
+fi
+
+# 1. Secret detection - prevent API keys/passwords from being committed
+echo "🔍 Checking for secrets..."
+# Get only non-deleted staged files (gitleaks can't handle deleted files)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=d)
+if [ -n "$STAGED_FILES" ]; then
+  echo "$STAGED_FILES" | xargs npx gitleaks detect --no-git -v || {
+    echo "❌ Secrets detected! Please remove sensitive data before committing."
+    exit 1
+  }
+fi
+
+# 2. Run lint-staged (prettier + eslint on staged files)
+npx lint-staged
+
+# 3. Run full TypeScript check (catches cross-file type errors)
+echo "🔧 Running TypeScript type check..."
+npx tsc --noEmit

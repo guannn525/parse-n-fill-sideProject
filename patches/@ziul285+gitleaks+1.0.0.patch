@@ -1,0 +1,40 @@
+diff --git a/node_modules/@ziul285/gitleaks/LICENSE b/node_modules/@ziul285/gitleaks/LICENSE
+old mode 100644
+new mode 100755
+diff --git a/node_modules/@ziul285/gitleaks/README.md b/node_modules/@ziul285/gitleaks/README.md
+old mode 100644
+new mode 100755
+diff --git a/node_modules/@ziul285/gitleaks/core/config.js b/node_modules/@ziul285/gitleaks/core/config.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/@ziul285/gitleaks/core/index.js b/node_modules/@ziul285/gitleaks/core/index.js
+index 18f3730..6cb2724 100755
+--- a/node_modules/@ziul285/gitleaks/core/index.js
++++ b/node_modules/@ziul285/gitleaks/core/index.js
+@@ -35,7 +35,10 @@ const runScan = async (argv) => {
+         const gitRepo = git(repoPath);
+         const status = await gitRepo.status();
+ 
+-        files = status.staged.map((file) => `${repoPath}/${file}`);
++        // Filter out deleted files - they don't exist on disk to scan
++        files = status.staged
++            .filter((file) => !status.deleted.includes(file))
++            .map((file) => `${repoPath}/${file}`);
+     }
+ 
+     if (isAll) {
+diff --git a/node_modules/@ziul285/gitleaks/core/patterns.js b/node_modules/@ziul285/gitleaks/core/patterns.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/@ziul285/gitleaks/core/scanner.js b/node_modules/@ziul285/gitleaks/core/scanner.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/@ziul285/gitleaks/reporter.js b/node_modules/@ziul285/gitleaks/reporter.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/@ziul285/gitleaks/utils/fileUtils.js b/node_modules/@ziul285/gitleaks/utils/fileUtils.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/@ziul285/gitleaks/utils/validator.js b/node_modules/@ziul285/gitleaks/utils/validator.js
+old mode 100644
+new mode 100755
