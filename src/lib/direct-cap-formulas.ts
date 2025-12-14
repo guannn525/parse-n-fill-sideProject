@@ -17,7 +17,7 @@
  * - Validation rules
  */
 
-import type { FormulaDefinition, ValidationResult } from '../types';
+import type { FormulaDefinition, ValidationResult } from '../types/custom-model';
 
 /**
  * Helper to create a validation result

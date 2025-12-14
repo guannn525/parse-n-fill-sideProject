@@ -54,6 +54,30 @@ export interface SourceNotationRef {
 }
 
 /**
+ * Valid source types for type validation
+ */
+const VALID_SOURCE_TYPES = ['userInput', 'calculated', 'sourceDocument', 'assumption'] as const;
+
+/**
+ * Valid reference types for type validation
+ */
+const VALID_REF_TYPES = ['index', 'key', 'id'] as const;
+
+/**
+ * Type guard to check if a string is a valid source type
+ */
+function isValidSourceType(value: string): value is SourceNotationRef['sourceType'] {
+  return VALID_SOURCE_TYPES.includes(value as any);
+}
+
+/**
+ * Type guard to check if a string is a valid reference type
+ */
+function isValidRefType(value: string): value is SourceNotationRef['refType'] {
+  return VALID_REF_TYPES.includes(value as any);
+}
+
+/**
  * Regular expression for matching source notation
  * Matches: ${valueKey, tooltip:sourceType-refType:refValue}
  */
@@ -167,11 +191,18 @@ export function extractSourceReferences(text: string): SourceNotationRef[] {
   let match: RegExpExecArray | null;
   while ((match = SOURCE_NOTATION_REGEX.exec(text)) !== null) {
     const [, valueKey, sourceType, refType, refValue] = match;
-    if (valueKey && sourceType && refType && refValue) {
+    if (
+      valueKey &&
+      sourceType &&
+      refType &&
+      refValue &&
+      isValidSourceType(sourceType) &&
+      isValidRefType(refType)
+    ) {
       references.push({
         valueKey,
-        sourceType: sourceType as SourceNotationRef['sourceType'],
-        refType: refType as SourceNotationRef['refType'],
+        sourceType,
+        refType,
         refValue,
       });
     }
@@ -201,10 +232,13 @@ export function replaceSourceNotation(
   valueResolver: (ref: SourceNotationRef) => string
 ): string {
   return text.replace(SOURCE_NOTATION_REGEX, (_match, valueKey, sourceType, refType, refValue) => {
+    const validSourceType = isValidSourceType(sourceType) ? sourceType : 'userInput';
+    const validRefType = isValidRefType(refType) ? refType : 'key';
+
     const ref: SourceNotationRef = {
       valueKey: valueKey ?? '',
-      sourceType: (sourceType as SourceNotationRef['sourceType']) ?? 'userInput',
-      refType: (refType as SourceNotationRef['refType']) ?? 'key',
+      sourceType: validSourceType,
+      refType: validRefType,
       refValue: refValue ?? '',
     };
     return valueResolver(ref);
@@ -229,18 +263,16 @@ export function validateSourceNotation(text: string): {
     errors.push('Unclosed source notation found (missing closing brace)');
   }
 
-  // Check for invalid source types
-  const validSourceTypes = ['userInput', 'calculated', 'sourceDocument', 'assumption'];
+  // Check for invalid source types and ref types
   const refs = extractSourceReferences(text);
 
   for (const ref of refs) {
-    if (!validSourceTypes.includes(ref.sourceType)) {
-      errors.push(`Invalid source type: ${ref.sourceType}. Valid types: ${validSourceTypes.join(', ')}`);
+    if (!isValidSourceType(ref.sourceType)) {
+      errors.push(`Invalid source type: ${ref.sourceType}. Valid types: ${VALID_SOURCE_TYPES.join(', ')}`);
     }
 
-    const validRefTypes = ['index', 'key', 'id'];
-    if (!validRefTypes.includes(ref.refType)) {
-      errors.push(`Invalid reference type: ${ref.refType}. Valid types: ${validRefTypes.join(', ')}`);
+    if (!isValidRefType(ref.refType)) {
+      errors.push(`Invalid reference type: ${ref.refType}. Valid types: ${VALID_REF_TYPES.join(', ')}`);
     }
   }
 

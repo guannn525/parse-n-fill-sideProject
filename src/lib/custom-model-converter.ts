@@ -8,7 +8,25 @@
  * populate the income module in other_branch.
  */
 
-import type { CustomFinancialModelOutput, LineItemWithSource } from '../types';
+import type { CustomFinancialModelOutput, LineItemWithSource } from '../types/custom-model';
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Calculate total revenue from rows
+ */
+function sumAnnualIncome(rows: { annualIncome: number | null }[]): number {
+  return rows.reduce((sum, row) => sum + (row.annualIncome || 0), 0);
+}
+
+/**
+ * Apply vacancy rate to gross revenue
+ */
+function applyVacancyRate(grossRevenue: number, vacancyRatePercent: number): number {
+  return grossRevenue * (1 - vacancyRatePercent / 100);
+}
 
 // =============================================================================
 // OTHER_BRANCH FORMAT TYPES
@@ -143,8 +161,8 @@ export function toOtherBranchFormat(
       : defaultVacancyRate;
 
   // Calculate totals
-  const grossRevenue = revenueRows.reduce((sum, row) => sum + (row.annualIncome || 0), 0);
-  const effectiveRevenue = grossRevenue * (1 - vacancyRate / 100);
+  const grossRevenue = sumAnnualIncome(revenueRows);
+  const effectiveRevenue = applyVacancyRate(grossRevenue, vacancyRate);
 
   // Create revenue stream
   const revenueStream: OtherBranchRevenueStream = {
@@ -211,6 +229,7 @@ export function toGroupedRevenueStreams(
 
   // Convert each group to a revenue stream
   const streams: OtherBranchRevenueStream[] = [];
+  let streamIndex = 0;
 
   for (const [category, categoryItems] of grouped) {
     const rows: OtherBranchRevenueRow[] = categoryItems.map((item, index) => ({
@@ -224,7 +243,7 @@ export function toGroupedRevenueStreams(
       operatingVacancyAndCreditLoss: 0,
     }));
 
-    const grossRevenue = rows.reduce((sum, row) => sum + (row.annualIncome || 0), 0);
+    const grossRevenue = sumAnnualIncome(rows);
 
     // Determine stream category based on keywords
     let streamCategory: 'Residential' | 'Commercial' | 'Miscellaneous' = 'Miscellaneous';
@@ -240,7 +259,7 @@ export function toGroupedRevenueStreams(
     }
 
     streams.push({
-      id: `stream-${category.toLowerCase().replace(/\s+/g, '-')}`,
+      id: `stream-${category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${streamIndex}`,
       name: category,
       category: streamCategory,
       rows,
@@ -250,6 +269,7 @@ export function toGroupedRevenueStreams(
         squareFootage: 0,
       },
     });
+    streamIndex++;
   }
 
   return streams;
