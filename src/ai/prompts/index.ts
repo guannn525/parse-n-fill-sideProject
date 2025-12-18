@@ -14,3 +14,8 @@ export {
   buildCategorizationPrompt,
   type LineItem,
 } from './categorization-prompt';
+
+export {
+  getRevenueStreamSystemPrompt,
+  buildRevenueStreamPrompt,
+} from './revenue-stream-prompt';

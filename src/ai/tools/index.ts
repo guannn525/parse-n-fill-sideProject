@@ -26,6 +26,7 @@
 // Tool exports
 export { extractFinancialData } from "./extract-financial-data";
 export { categorizeLineItems } from "./categorize-line-items";
+export { extractRevenueStreams } from "./extract-revenue-streams";
 
 // Type exports
 export type {
@@ -44,6 +45,15 @@ export type {
   CategorizationInput,
 } from "./types";
 
+// Revenue stream type exports
+export type {
+  RevenueStreamCategory,
+  RevenueRowInput,
+  RevenueStreamInput,
+  ExtractRevenueStreamsInput,
+  ExtractRevenueStreamsOutput,
+} from "./revenue-stream-types";
+
 // Schema exports (for validation or extending)
 export {
   extractionInputSchema,
@@ -53,3 +63,12 @@ export {
   categorizationOutputSchema,
   categorizedItemSchema,
 } from "./types";
+
+// Revenue stream schema exports
+export {
+  revenueStreamCategorySchema,
+  revenueRowSchema,
+  revenueStreamSchema,
+  extractRevenueStreamsInputSchema,
+  extractRevenueStreamsOutputSchema,
+} from "./revenue-stream-types";

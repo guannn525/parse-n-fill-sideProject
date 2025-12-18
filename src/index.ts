@@ -10,6 +10,10 @@ export type {
   DirectCapitalizationRateModel,
   DirectCapCalculations,
   DirectCapResult,
+  RevenueStreamCategory,
+  RevenueRow,
+  RevenueStream,
+  RevenueStreamExtractionResult,
 } from "./types";
 
 // Custom Financial Model Types

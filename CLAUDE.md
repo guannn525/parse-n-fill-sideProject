@@ -16,8 +16,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 src/
 ├── types/              # TypeScript interfaces
 │   └── revenue-stream.ts
-├── schemas/            # Zod validation schemas
-│   └── revenue-stream-schema.ts
 ├── parsers/            # File parsing utilities
 │   ├── index.ts        # Parser factory
 │   ├── pdf-parser.ts   # Claude vision for PDFs
@@ -27,10 +25,13 @@ src/
 ├── ai/
 │   ├── config.ts       # Claude model configuration
 │   ├── prompts/        # System prompts
-│   │   └── extraction-prompt.ts
-│   └── tools/          # AI agent tools
-│       ├── extract-revenue-streams.ts
-│       └── categorize-revenue-streams.ts
+│   │   ├── extraction-prompt.ts
+│   │   └── revenue-stream-prompt.ts
+│   └── tools/          # AI agent tools + Zod schemas
+│       ├── extract-revenue-streams.ts  # Extraction + categorization
+│       ├── revenue-stream-types.ts     # Zod schemas
+│       ├── extract-financial-data.ts
+│       └── categorize-line-items.ts
 ├── agent/              # Revenue extraction agent
 │   └── revenue-extraction-agent.ts
 ├── export/             # Excel export utilities
@@ -46,10 +47,11 @@ src/
 ### Quick Reference
 
 - **Types** → `src/types/`
-- **Validation Schemas** → `src/schemas/`
+- **Zod Schemas** → `src/ai/tools/*-types.ts`
 - **File Parsers** → `src/parsers/`
 - **AI Configuration** → `src/ai/config.ts`
 - **AI Tools** → `src/ai/tools/`
+- **AI Prompts** → `src/ai/prompts/`
 - **Agent Logic** → `src/agent/`
 - **Excel Export** → `src/export/`
 - **API Handlers** → `src/api/`
@@ -79,10 +81,9 @@ Parser Layer (Claude vision or ExcelJS/PapaParse)
 Parsed Text Content
     ↓
 AI Agent (extractRevenueStreams tool)
+    ↓ (extraction + categorization in one step)
     ↓
-Categorization (categorizeRevenueStreams tool)
-    ↓
-RevenueStream[] JSON
+RevenueStream[] JSON (with categories assigned)
     ↓
 Excel Export (optional)
 ```
@@ -94,32 +95,21 @@ interface RevenueStream {
   id: string;
   name: string;                     // "Office Rents", "Parking", etc.
   category: 'Residential' | 'Commercial' | 'Miscellaneous';
-  notes?: string;
   order: number;
   rows: RevenueRow[];
-  vacancyRate?: number;             // 0-100
-  totals?: {
-    grossRevenue: number;
-    effectiveRevenue: number;
-    squareFootage: number;
-  };
 }
 
 interface RevenueRow {
   id: string;
   unit: string;                     // "Apt 1A", "Suite 200"
   squareFeet: number | null;
-  monthlyRate: number | null;
-  annualIncome: number | null;      // monthlyRate * 12
-  effectiveAnnualIncome: number | null;
+  monthlyRate: number | null;        // AI extracts if in document
+  annualIncome: number | null;       // AI extracts if in document
   isVacant: boolean;
-  operatingVacancyAndCreditLoss: number;
-  tenantName?: string;
-  marketRent?: number | null;
-  rentVariance?: number | null;
-  leaseExpiry?: string;
 }
 ```
+
+**Note:** UI calculates Vac %, Effective, $/SF from these base fields.
 
 ### AI Agent Design
 
