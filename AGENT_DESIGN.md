@@ -14,42 +14,42 @@ The AI agent handles reasoning, context understanding, and decision-making. Tool
 // BAD: Tool makes decisions
 execute: async ({ content }) => {
   // Don't hard-code heuristics in tools
-  if (content.includes("rent")) {
-    return { category: "revenue" };
+  if (content.includes("apt")) {
+    return { category: "Residential" };
   }
-  // This misses edge cases like "rent expense"
+  // This misses edge cases like "apt-style offices"
 }
 
 // GOOD: Tool returns data, agent decides
 execute: async ({ content }) => {
   // Return all matches, let agent categorize
-  const matches = extractAllLineItems(content);
+  const matches = extractAllRevenueRows(content);
   return { matches, metadata: { count: matches.length } };
 }
 ```
 
 ## Agent Architecture
 
-### Financial Extraction Agent
+### Revenue Extraction Agent
 
-The main agent orchestrates document parsing through multi-step reasoning.
+The main agent orchestrates rent roll parsing through multi-step reasoning.
 
 ```typescript
 import { generateText } from "ai";
 import { aiModel, AI_CONFIG } from "../ai/config";
 
-export async function runFinancialExtractionAgent(
+export async function runRevenueExtractionAgent(
   parsedContent: string,
   fileName: string
-): Promise<DirectCapResult> {
+): Promise<ParseResult> {
   const startTime = Date.now();
 
   const result = await generateText({
     model: aiModel,
     maxSteps: AI_CONFIG.maxSteps,
     tools: {
-      extractFinancialData: extractFinancialDataTool,
-      categorizeLineItems: categorizeLineItemsTool,
+      extractRevenueRows: extractRevenueRowsTool,
+      categorizeRevenueStreams: categorizeRevenueStreamsTool,
       validateExtraction: validateExtractionTool,
     },
     system: getExtractionSystemPrompt(),
@@ -57,12 +57,12 @@ export async function runFinancialExtractionAgent(
   });
 
   return {
-    model: extractModelFromResult(result),
-    calculations: calculateMetrics(result),
+    revenueStreams: extractStreamsFromResult(result),
     metadata: {
       sourceFileName: fileName,
       processingTimeMs: Date.now() - startTime,
       confidence: calculateConfidence(result),
+      agentReasoning: extractReasoning(result),
     },
   };
 }
@@ -71,19 +71,19 @@ export async function runFinancialExtractionAgent(
 ### Orchestration Flow
 
 ```
-Step 1: extractFinancialData
+Step 1: extractRevenueRows
    ↓
-   Agent analyzes extracted items
+   Agent analyzes extracted unit data
    ↓
-Step 2: categorizeLineItems
+Step 2: categorizeRevenueStreams
    ↓
-   Agent reviews categorizations
+   Agent groups rows into Residential/Commercial/Miscellaneous
    ↓
 Step 3: validateExtraction
    ↓
    Agent confirms or corrects
    ↓
-Final: Structured output
+Final: RevenueStream[] output
 ```
 
 ## Tool Definitions
@@ -125,118 +125,127 @@ export const myTool = tool({
 });
 ```
 
-### extractFinancialData Tool
+### extractRevenueRows Tool
 
 ```typescript
-export const extractFinancialDataTool = tool({
-  description: `Extract financial line items from parsed document content.
+export const extractRevenueRowsTool = tool({
+  description: `Extract revenue row data from parsed rent roll content.
 
   Identifies:
-  - Revenue items: rent, fees, parking, laundry, other income
-  - Expense items: taxes, insurance, utilities, maintenance, management
-  - Adjustment items: capital reserves, deferred maintenance, vacancy
+  - Unit identifiers: apartment numbers, suite numbers, space IDs
+  - Square footage: unit SF, rentable SF
+  - Monthly rates: base rent, monthly rent amounts
+  - Annual income: yearly totals or calculated from monthly
+  - Vacancy status: occupied/vacant indicators
+  - Tenant names: lessee names, tenant info
 
-  Returns all identified items with their dollar amounts.
-  Does NOT categorize - that's for the categorizeLineItems tool.`,
+  Returns all identified rows with their data fields.
+  Does NOT categorize - that's for the categorizeRevenueStreams tool.`,
 
   inputSchema: z.object({
     content: z.string().describe("Parsed document text content"),
-    focusArea: z.enum(["revenue", "expenses", "adjustments", "all"])
+    focusArea: z.enum(["Residential", "Commercial", "Miscellaneous", "all"])
       .default("all")
       .describe("Focus extraction on specific category"),
   }),
 
   execute: async ({ content, focusArea }) => {
-    const lineItems = [];
+    const rows = [];
 
-    // Pattern matching for financial data
+    // Pattern matching for rent roll data
     const patterns = {
-      currency: /\$[\d,]+(?:\.\d{2})?/g,
-      percentage: /\d+(?:\.\d+)?%/g,
-      labelValue: /([A-Za-z\s]+)[:]\s*\$?([\d,]+(?:\.\d{2})?)/g,
+      unit: /(?:Unit|Apt|Suite|Space)\s*[#:]?\s*(\w+)/gi,
+      sqft: /(\d{3,5})\s*(?:SF|sq\.?\s*ft)/gi,
+      monthly: /\$[\d,]+(?:\.\d{2})?\s*(?:\/?\s*(?:mo|month))?/gi,
+      tenant: /Tenant:\s*([^,\n]+)/gi,
     };
 
-    // Extract matches
-    let match;
-    while ((match = patterns.labelValue.exec(content)) !== null) {
-      lineItems.push({
-        label: match[1].trim(),
-        value: parseFloat(match[2].replace(/,/g, "")),
-        context: getContextAround(content, match.index),
-      });
-    }
+    // Extract matches - simplified example
+    // Real implementation would be more sophisticated
 
     return {
       success: true,
-      lineItems,
-      totalFound: lineItems.length,
+      rows,
+      totalFound: rows.length,
       focusArea,
     };
   },
 });
 ```
 
-### categorizeLineItems Tool
+### categorizeRevenueStreams Tool
 
 ```typescript
-export const categorizeLineItemsTool = tool({
-  description: `Categorize financial line items into revenue, expenses, or adjustments.
+export const categorizeRevenueStreamsTool = tool({
+  description: `Categorize revenue rows into streams by property type.
 
   Categories:
-  - REVENUE: Income-generating items (rent, fees, parking)
-  - EXPENSES: Operating costs (taxes, insurance, utilities, repairs)
-  - ADJUSTMENTS: One-time or non-operating items (reserves, capital improvements)
+  - RESIDENTIAL: Apartments, multifamily units, residential rentals
+  - COMMERCIAL: Office, retail, industrial, mixed-use commercial
+  - MISCELLANEOUS: Parking, storage, laundry, vending, other income
 
+  Groups rows into RevenueStream objects by category.
   Uses commercial real estate domain knowledge for categorization.`,
 
   inputSchema: z.object({
-    lineItems: z.array(z.object({
-      label: z.string(),
-      value: z.number(),
+    rows: z.array(z.object({
+      unit: z.string(),
+      squareFeet: z.number().nullable(),
+      monthlyRate: z.number().nullable(),
+      tenantName: z.string().optional(),
       context: z.string().optional(),
-    })).describe("Line items to categorize"),
+    })).describe("Revenue rows to categorize"),
   }),
 
-  execute: async ({ lineItems }) => {
-    const categorized = {
-      revenue: [] as { label: string; value: number }[],
-      expenses: [] as { label: string; value: number }[],
-      adjustments: [] as { label: string; value: number }[],
-      uncategorized: [] as { label: string; value: number }[],
+  execute: async ({ rows }) => {
+    const streams = {
+      Residential: [] as RevenueRow[],
+      Commercial: [] as RevenueRow[],
+      Miscellaneous: [] as RevenueRow[],
     };
 
-    // Keywords for categorization hints (agent makes final decision)
+    // Category hints (agent makes final decision)
     const hints = {
-      revenue: ["rent", "income", "fee", "parking", "laundry", "revenue"],
-      expenses: ["tax", "insurance", "utility", "maintenance", "repair", "management"],
-      adjustments: ["reserve", "capital", "deferred", "vacancy", "adjustment"],
+      Residential: ["apt", "unit", "bedroom", "br", "apartment", "residential"],
+      Commercial: ["suite", "office", "retail", "commercial", "floor"],
+      Miscellaneous: ["parking", "storage", "laundry", "vending", "misc"],
     };
 
-    for (const item of lineItems) {
-      const labelLower = item.label.toLowerCase();
-      let category = "uncategorized";
+    for (const row of rows) {
+      const unitLower = row.unit.toLowerCase();
+      let category: keyof typeof streams = "Miscellaneous";
 
       for (const [cat, keywords] of Object.entries(hints)) {
-        if (keywords.some((kw) => labelLower.includes(kw))) {
-          category = cat;
+        if (keywords.some((kw) => unitLower.includes(kw))) {
+          category = cat as keyof typeof streams;
           break;
         }
       }
 
-      categorized[category as keyof typeof categorized].push({
-        label: item.label,
-        value: item.value,
+      streams[category].push({
+        id: crypto.randomUUID(),
+        ...row,
+        annualIncome: row.monthlyRate ? row.monthlyRate * 12 : null,
+        isVacant: !row.tenantName,
+        operatingVacancyAndCreditLoss: 5, // Default 5%
       });
     }
 
     return {
       success: true,
-      categorized,
+      streams: Object.entries(streams)
+        .filter(([_, rows]) => rows.length > 0)
+        .map(([category, rows], index) => ({
+          id: crypto.randomUUID(),
+          name: category === "Miscellaneous" ? "Other Income" : `${category} Rents`,
+          category,
+          order: index + 1,
+          rows,
+        })),
       summary: {
-        revenueCount: categorized.revenue.length,
-        expensesCount: categorized.expenses.length,
-        adjustmentsCount: categorized.adjustments.length,
-        uncategorizedCount: categorized.uncategorized.length,
+        residentialCount: streams.Residential.length,
+        commercialCount: streams.Commercial.length,
+        miscellaneousCount: streams.Miscellaneous.length,
       },
     };
   },
@@ -247,58 +256,75 @@ export const categorizeLineItemsTool = tool({
 
 ```typescript
 export const validateExtractionTool = tool({
-  description: `Validate extracted financial data for consistency and completeness.
+  description: `Validate extracted revenue streams for consistency and completeness.
 
   Checks:
-  - Sum verification (line items match totals if provided)
-  - Category completeness (at least revenue and expenses)
-  - Value reasonableness (no negative revenue, etc.)
-  - Duplicate detection`,
+  - Sum verification (row totals match stream totals if provided)
+  - Data completeness (each row has unit + at least one value)
+  - Value reasonableness (no negative rents, realistic SF ranges)
+  - Duplicate detection (same unit appearing twice)`,
 
   inputSchema: z.object({
-    model: z.object({
-      annualOperatingRevenue: z.record(z.number()),
-      annualOperatingExpenses: z.record(z.number()),
-      oneTimeAdjustment: z.record(z.number()),
-    }).describe("The DirectCapitalizationRateModel to validate"),
+    streams: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      category: z.enum(["Residential", "Commercial", "Miscellaneous"]),
+      rows: z.array(z.object({
+        unit: z.string(),
+        squareFeet: z.number().nullable(),
+        monthlyRate: z.number().nullable(),
+        annualIncome: z.number().nullable(),
+      })),
+    })).describe("The RevenueStream[] to validate"),
     expectedTotals: z.object({
-      totalRevenue: z.number().optional(),
-      totalExpenses: z.number().optional(),
+      totalGrossRevenue: z.number().optional(),
+      totalUnits: z.number().optional(),
     }).optional().describe("Expected totals from document for verification"),
   }),
 
-  execute: async ({ model, expectedTotals }) => {
+  execute: async ({ streams, expectedTotals }) => {
     const issues: string[] = [];
     const warnings: string[] = [];
 
-    // Calculate sums
-    const revenueSum = Object.values(model.annualOperatingRevenue)
-      .reduce((a, b) => a + b, 0);
-    const expenseSum = Object.values(model.annualOperatingExpenses)
-      .reduce((a, b) => a + b, 0);
-    const adjustmentSum = Object.values(model.oneTimeAdjustment)
-      .reduce((a, b) => a + b, 0);
+    // Calculate totals
+    let totalUnits = 0;
+    let totalGrossRevenue = 0;
 
-    // Check for negative revenue
-    for (const [label, value] of Object.entries(model.annualOperatingRevenue)) {
-      if (value < 0) {
-        issues.push(`Negative revenue: ${label} = ${value}`);
+    for (const stream of streams) {
+      for (const row of stream.rows) {
+        totalUnits++;
+        if (row.annualIncome) {
+          totalGrossRevenue += row.annualIncome;
+        }
+
+        // Check for negative values
+        if (row.monthlyRate && row.monthlyRate < 0) {
+          issues.push(`Negative rent: ${row.unit} = $${row.monthlyRate}`);
+        }
+
+        // Check for unrealistic SF
+        if (row.squareFeet && (row.squareFeet < 50 || row.squareFeet > 100000)) {
+          warnings.push(`Unusual SF: ${row.unit} = ${row.squareFeet} SF`);
+        }
       }
     }
 
-    // Check category completeness
-    if (Object.keys(model.annualOperatingRevenue).length === 0) {
-      warnings.push("No revenue items extracted");
-    }
-    if (Object.keys(model.annualOperatingExpenses).length === 0) {
-      warnings.push("No expense items extracted");
+    // Check completeness
+    if (totalUnits === 0) {
+      warnings.push("No revenue rows extracted");
     }
 
     // Verify against expected totals
-    if (expectedTotals?.totalRevenue) {
-      const diff = Math.abs(revenueSum - expectedTotals.totalRevenue);
-      if (diff > 1) {  // Allow $1 rounding difference
-        issues.push(`Revenue sum (${revenueSum}) doesn't match expected (${expectedTotals.totalRevenue})`);
+    if (expectedTotals?.totalUnits) {
+      if (totalUnits !== expectedTotals.totalUnits) {
+        issues.push(`Unit count (${totalUnits}) doesn't match expected (${expectedTotals.totalUnits})`);
+      }
+    }
+
+    if (expectedTotals?.totalGrossRevenue) {
+      const diff = Math.abs(totalGrossRevenue - expectedTotals.totalGrossRevenue);
+      if (diff > 1) {
+        issues.push(`Revenue sum ($${totalGrossRevenue}) doesn't match expected ($${expectedTotals.totalGrossRevenue})`);
       }
     }
 
@@ -308,10 +334,9 @@ export const validateExtractionTool = tool({
       issues,
       warnings,
       calculations: {
-        totalRevenue: revenueSum,
-        totalExpenses: expenseSum,
-        totalAdjustments: adjustmentSum,
-        netOperatingIncome: revenueSum - expenseSum,
+        totalUnits,
+        totalGrossRevenue,
+        streamCount: streams.length,
       },
     };
   },
@@ -328,22 +353,23 @@ Keep system prompts **under 500 tokens** (sent with every request).
 // src/ai/prompts/extraction-prompt.ts
 
 export function getExtractionSystemPrompt(): string {
-  return `You are a financial document analyst specializing in commercial real estate.
+  return `You are a rent roll analyst specializing in commercial real estate.
 
-Your task: Extract financial data and output a DirectCapitalizationRateModel.
+Your task: Extract unit-level revenue data and output RevenueStream[] format.
 
 Output structure:
-- annualOperatingRevenue: All income items (rent, fees, etc.)
-- annualOperatingExpenses: All operating costs (taxes, insurance, etc.)
-- oneTimeAdjustment: Non-recurring items (capital reserves, deferred maintenance)
+- RevenueStream[]: Array of categorized revenue streams
+  - Each stream has: id, name, category, rows[], totals
+  - Categories: Residential, Commercial, Miscellaneous
+- Each RevenueRow has: unit, squareFeet, monthlyRate, annualIncome, isVacant, tenantName
 
 Guidelines:
 1. Use tools to extract and categorize data
 2. Provide reasoning for your categorization decisions
 3. Flag any ambiguous items for review
-4. Ensure all values are annual amounts
+4. Calculate annualIncome as monthlyRate * 12
 
-Be thorough but efficient. Extract all relevant financial data.`;
+Be thorough but efficient. Extract all unit-level revenue data.`;
 }
 ```
 
@@ -351,7 +377,7 @@ Be thorough but efficient. Extract all relevant financial data.`;
 
 ```typescript
 export function buildExtractionPrompt(content: string, fileName: string): string {
-  return `Analyze this financial document and extract all line items.
+  return `Analyze this rent roll and extract all revenue data.
 
 Document: ${fileName}
 
@@ -359,12 +385,12 @@ Content:
 ${content}
 
 Instructions:
-1. Use extractFinancialData to identify all financial line items
-2. Use categorizeLineItems to classify each as revenue, expense, or adjustment
-3. Use validateExtraction to verify your categorization
-4. Provide your reasoning for the agentReasoning field
+1. Use extractRevenueRows to identify all unit/lease data
+2. Use categorizeRevenueStreams to group by Residential/Commercial/Miscellaneous
+3. Use validateExtraction to verify your extraction
+4. Provide reasoning for how you categorized each stream
 
-Return the complete DirectCapitalizationRateModel.`;
+Return the complete RevenueStream[] array.`;
 }
 ```
 
@@ -406,10 +432,10 @@ execute: async (input) => {
 ### Agent-Level Error Handling
 
 ```typescript
-export async function runFinancialExtractionAgent(
+export async function runRevenueExtractionAgent(
   parsedContent: string,
   fileName: string
-): Promise<DirectCapResult> {
+): Promise<ParseResult> {
   try {
     const result = await generateText({ ... });
 
@@ -421,7 +447,7 @@ export async function runFinancialExtractionAgent(
       });
     }
 
-    return extractModelFromResult(result);
+    return extractResultFromResponse(result);
 
   } catch (error) {
     if (error instanceof ExtractionError) {
@@ -435,36 +461,34 @@ export async function runFinancialExtractionAgent(
 }
 ```
 
-## Financial Domain Knowledge
+## Revenue Domain Knowledge
 
-### Revenue Categories
+### Revenue Stream Categories
 
-| Category | Examples | Notes |
-|----------|----------|-------|
-| Rental Income | Base rent, Additional rent | Primary income source |
-| Parking | Monthly parking, Transient parking | Common in commercial |
-| Other Income | Laundry, Vending, Storage | Ancillary income |
-| Reimbursements | CAM recoveries, Tax recoveries | Pass-through to tenants |
+| Category | Examples | Indicators |
+|----------|----------|------------|
+| Residential | Apartments, Units, Bedrooms | "Apt", "Unit", "BR", "Bedroom" |
+| Commercial | Offices, Retail, Suites | "Suite", "Office", "Floor", "Retail" |
+| Miscellaneous | Parking, Storage, Laundry | "Parking", "Storage", "Laundry" |
 
-### Expense Categories
+### Common Rent Roll Fields
 
-| Category | Examples | Notes |
-|----------|----------|-------|
-| Property Tax | Real estate tax, Special assessments | Major expense |
-| Insurance | Property insurance, Liability | Required coverage |
-| Utilities | Electric, Gas, Water, Trash | May be partial reimbursement |
-| Maintenance | Repairs, Landscaping, Janitorial | Ongoing costs |
-| Management | Property management fee | Usually % of revenue |
-| Professional | Legal, Accounting, Consulting | As-needed services |
+| Field | Examples | Notes |
+|-------|----------|-------|
+| Unit ID | Apt 1A, Suite 200, Space 101 | Primary identifier |
+| Square Feet | 850 SF, 1,200 sq ft | Rentable area |
+| Monthly Rent | $1,500/mo, $2,000 | Base rent amount |
+| Tenant Name | John Smith, ABC Corp | Occupancy indicator |
+| Lease Expiry | 12/31/2025, Dec 2025 | Lease term info |
+| Vacancy Status | Vacant, Occupied | Explicit or inferred |
 
-### Adjustment Categories
+### Calculated Fields
 
-| Category | Examples | Notes |
-|----------|----------|-------|
-| Capital Reserves | Replacement reserves | For future capital items |
-| Vacancy | Vacancy allowance | Expected vacancy loss |
-| Deferred Maintenance | Backlog repairs | One-time catch-up |
-| Capital Improvements | Roof replacement, HVAC | Non-recurring capital |
+| Field | Formula | Notes |
+|-------|---------|-------|
+| Annual Income | monthlyRate * 12 | Gross annual |
+| Effective Income | annualIncome * (1 - vacancyRate/100) | After vacancy |
+| Rent/SF | monthlyRate / squareFeet | Unit economics |
 
 ## Testing Agents
 
@@ -475,9 +499,9 @@ import { vi } from "vitest";
 
 const mockExtractTool = vi.fn().mockResolvedValue({
   success: true,
-  lineItems: [
-    { label: "Rental Income", value: 120000 },
-    { label: "Property Tax", value: 15000 },
+  rows: [
+    { unit: "Apt 1A", squareFeet: 850, monthlyRate: 1500, tenantName: "John Smith" },
+    { unit: "Apt 1B", squareFeet: 900, monthlyRate: 1600, tenantName: null },
   ],
 });
 ```
@@ -485,26 +509,43 @@ const mockExtractTool = vi.fn().mockResolvedValue({
 ### Agent Integration Tests
 
 ```typescript
-describe("Financial Extraction Agent", () => {
+describe("Revenue Extraction Agent", () => {
   it("should handle rent roll documents", async () => {
     const content = `
       Rent Roll Summary
-      Unit 101: $1,200/month = $14,400/year
-      Unit 102: $1,100/month = $13,200/year
-      Total Rental Income: $27,600
+      Unit 101: $1,200/month, 850 SF, John Smith
+      Unit 102: $1,100/month, 800 SF, Jane Doe
+      Total: $2,300/month
     `;
 
-    const result = await runFinancialExtractionAgent(content, "rent-roll.txt");
+    const result = await runRevenueExtractionAgent(content, "rent-roll.txt");
 
-    expect(result.model.annualOperatingRevenue["Rental Income"]).toBe(27600);
-    expect(result.model.agentReasoning).toContain("rent");
+    expect(result.revenueStreams).toHaveLength(1);
+    expect(result.revenueStreams[0].rows).toHaveLength(2);
+    expect(result.revenueStreams[0].category).toBe("Residential");
   });
 
   it("should handle empty documents gracefully", async () => {
-    const result = await runFinancialExtractionAgent("", "empty.txt");
+    const result = await runRevenueExtractionAgent("", "empty.txt");
 
-    expect(result.model.agentReasoning).toContain("empty");
-    expect(Object.keys(result.model.annualOperatingRevenue)).toHaveLength(0);
+    expect(result.metadata.agentReasoning).toContain("empty");
+    expect(result.revenueStreams).toHaveLength(0);
+  });
+
+  it("should categorize mixed-use properties", async () => {
+    const content = `
+      Mixed-Use Property Rent Roll
+      Suite 100 (Retail): $3,000/mo, ABC Store
+      Suite 200 (Office): $2,500/mo, XYZ Corp
+      Apt 1A: $1,500/mo, John Smith
+      Parking Space 1: $100/mo, John Smith
+    `;
+
+    const result = await runRevenueExtractionAgent(content, "mixed-use.txt");
+
+    expect(result.revenueStreams.length).toBeGreaterThanOrEqual(2);
+    expect(result.revenueStreams.some(s => s.category === "Commercial")).toBe(true);
+    expect(result.revenueStreams.some(s => s.category === "Residential")).toBe(true);
   });
 });
 ```

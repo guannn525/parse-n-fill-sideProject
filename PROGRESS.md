@@ -1,10 +1,10 @@
 # PARSE-N-FILL Progress Checklist
 
-**Purpose**: Track implementation of a modular financial document parsing feature compatible with both MAP05 and other_branch.
+**Purpose**: Track implementation of a modular financial document parsing feature that extracts revenue streams compatible with other_branch's income-approach module.
 
-**Current State**: Phase 3 complete. Ready for Phase 4 (Agent Layer).
+**Current State**: Phase 2 complete. Phase 3 needs revision for RevenueStream output.
 
-**Last Updated**: 2025-12-14
+**Last Updated**: 2025-12-17
 
 ---
 
@@ -18,7 +18,7 @@
 ### 1.2 System Prompts
 - [x] Create `src/ai/prompts/extraction-prompt.ts` - Financial data extraction prompt
 - [x] Create `src/ai/prompts/categorization-prompt.ts` - Line item categorization prompt
-- [x] Include domain knowledge for commercial real estate (revenue/expense categories)
+- [x] Include domain knowledge for commercial real estate (revenue categories)
 
 ### 1.3 Utility Layer
 - [x] Create `src/lib/errors.ts` - Custom error classes (ParseError, ValidationError, AIError)
@@ -56,33 +56,38 @@
 
 ---
 
-## Phase 3: AI Tools Layer ✅
+## Phase 3: AI Tools Layer (Revision Needed)
 
-### 3.1 Extraction Tool
-- [x] Create `src/ai/tools/extract-financial-data.ts`
-- [x] Define Zod input schema (parsed content, document type hints)
-- [x] Implement extraction logic using Claude
-- [x] Return structured line items with confidence scores
+### 3.1 Revenue Stream Extraction Tool
+- [ ] Create `src/ai/tools/extract-revenue-streams.ts`
+- [ ] Define Zod input schema (parsed content, document type hints)
+- [ ] Implement extraction logic using Claude
+- [ ] Return structured RevenueRow[] with unit-level data (unit, sqft, monthlyRate, vacancy)
+- [ ] Include confidence scores and source tracking
 
-### 3.2 Categorization Tool
-- [x] Create `src/ai/tools/categorize-line-items.ts`
-- [x] Define categories: revenue, expenses, one-time adjustments
-- [x] Implement reasoning capture for audit trail
-- [x] Support custom category mappings
+### 3.2 Revenue Categorization Tool
+- [ ] Create `src/ai/tools/categorize-revenue-streams.ts`
+- [ ] Define categories: Residential, Commercial, Miscellaneous
+- [ ] Group extracted rows into RevenueStream objects by category
+- [ ] Implement reasoning capture for audit trail
 
 ### 3.3 Tool Tests
-- [x] Create `src/ai/tools/extract-financial-data.test.ts`
-- [x] Create `src/ai/tools/categorize-line-items.test.ts`
-- [x] Mock Claude API for deterministic testing
+- [ ] Create `src/ai/tools/extract-revenue-streams.test.ts`
+- [ ] Create `src/ai/tools/categorize-revenue-streams.test.ts`
+- [ ] Mock Claude API for deterministic testing
+
+### 3.4 Types & Schemas
+- [ ] Create `src/types/revenue-stream.ts` - RevenueStream, RevenueRow interfaces
+- [ ] Create `src/schemas/revenue-stream-schema.ts` - Zod validation schemas
 
 ---
 
 ## Phase 4: Agent Layer
 
-### 4.1 Financial Extraction Agent
-- [ ] Create `src/agent/financial-extraction-agent.ts`
-- [ ] Implement orchestration: parse -> extract -> categorize -> validate
-- [ ] Handle multi-page documents
+### 4.1 Revenue Extraction Agent
+- [ ] Create `src/agent/revenue-extraction-agent.ts`
+- [ ] Implement orchestration: parse -> extract rows -> categorize streams -> validate
+- [ ] Handle multi-page rent rolls
 - [ ] Support incremental extraction for large files
 
 ### 4.2 Agent Configuration
@@ -91,7 +96,7 @@
 - [ ] Add progress reporting callbacks
 
 ### 4.3 Agent Tests
-- [ ] Create `src/agent/financial-extraction-agent.test.ts`
+- [ ] Create `src/agent/revenue-extraction-agent.test.ts`
 - [ ] Test full extraction pipeline
 - [ ] Test error recovery scenarios
 
@@ -101,13 +106,14 @@
 
 ### 5.1 Excel Export
 - [ ] Create `src/export/excel-export.ts`
-- [ ] Define workbook structure (Revenue, Expenses, Adjustments sheets)
-- [ ] Include formatting (headers, totals, conditional formatting)
+- [ ] Define workbook structure matching income-approach revenue format
+- [ ] Include unit-level breakdown (not just totals)
+- [ ] Add formatting (headers, totals, conditional formatting)
 - [ ] Add metadata sheet (timestamp, source file, agent reasoning)
 
 ### 5.2 Export Tests
 - [ ] Create `src/export/excel-export.test.ts`
-- [ ] Verify workbook structure
+- [ ] Verify workbook structure matches income-approach format
 - [ ] Test with various data volumes
 
 ---
@@ -117,12 +123,12 @@
 ### 6.1 Parse Document API
 - [ ] Implement `src/api/parse-document.ts` (currently stub)
 - [ ] Accept: file buffer/URL, options
-- [ ] Return: DirectCapitalizationRateModel + metadata
+- [ ] Return: `{ revenueStreams: RevenueStream[] }` + metadata
 - [ ] Add request validation with Zod schemas
 
 ### 6.2 Export Excel API
 - [ ] Implement `src/api/export-excel.ts` (currently stub)
-- [ ] Accept: DirectCapitalizationRateModel
+- [ ] Accept: RevenueStream[]
 - [ ] Return: Excel buffer or file path
 - [ ] Support streaming for large files
 
@@ -133,67 +139,46 @@
 
 ---
 
-## Phase 7: Integration - MAP05
-
-> **NOTE: FOR DOCUMENTATION ONLY**
->
-> MAP05 is a separate production application. The tasks below document HOW to integrate PARSE-N-FILL into MAP05, but the actual integration work will be done in the MAP05 repository, NOT here. Do NOT edit files in `/mnt/c/PARSE-N-FILL/MAP05/`.
-
-### 7.1 AI Tool Integration (in MAP05 repo)
-- [ ] Create tool in MAP05: `src/lib/ai/tools/parse-financial-document.ts`
-- [ ] Import parse-n-fill module
-- [ ] Map to existing file infrastructure (uploadedFiles table)
-
-### 7.2 API Route (optional, in MAP05 repo)
-- [ ] Create `src/app/api/parse-financial/route.ts` in MAP05
-- [ ] Use existing auth (Supabase)
-- [ ] Leverage existing file storage
-
-### 7.3 Integration Tests (in MAP05 repo)
-- [ ] Test with MAP05's uploaded files
-- [ ] Verify data flows to POI/table system
-
----
-
-## Phase 8: Integration - other_branch
+## Phase 7: Integration - other_branch
 
 > **NOTE: FOR DOCUMENTATION ONLY**
 >
 > other_branch is a separate production application. The tasks below document HOW to integrate PARSE-N-FILL into other_branch, but the actual integration work will be done in the other_branch repository, NOT here. Do NOT edit files in `/mnt/c/PARSE-N-FILL/other_branch/`.
 
-### 8.1 API Route (in other_branch repo)
+### 7.1 API Route (in other_branch repo)
 - [ ] Create `src/app/api/parse-document/route.ts` in other_branch
 - [ ] Use Clerk auth (`auth()` from `@clerk/nextjs/server`)
 - [ ] Accept file upload or session file reference
 
-### 8.2 Type Mapping (in other_branch repo)
-- [ ] Map DirectCapitalizationRateModel -> RevenueStream[]
-- [ ] Map DirectCapitalizationRateModel -> ExpenseRow[]
-- [ ] Map to PropertyData if property info detected
+### 7.2 Type Mapping (in other_branch repo)
+- [ ] Map PARSE-N-FILL RevenueStream[] -> other_branch RevenueStream[]
+- [ ] Ensure id, name, category, rows[], vacancyRate, totals compatibility
+- [ ] Handle RevenueRow field mapping (unit, squareFeet, monthlyRate, etc.)
 
-### 8.3 Session Integration (in other_branch repo)
+### 7.3 Session Integration (in other_branch repo)
 - [ ] Update session with parsed data via `/api/sessions/drafts/[id]`
-- [ ] Pre-populate Zustand store from parsed results
+- [ ] Pre-populate income-approach revenue page from parsed results
+- [ ] Update Zustand store (SubModule.data.revenueStreams)
 
-### 8.4 Integration Tests (in other_branch repo)
+### 7.4 Integration Tests (in other_branch repo)
 - [ ] Test with other_branch session workflow
-- [ ] Verify financial calculations work with parsed data
+- [ ] Verify revenue calculations work with parsed data
 
 ---
 
-## Phase 9: Quality & Documentation
+## Phase 8: Quality & Documentation
 
-### 9.1 Test Coverage
+### 8.1 Test Coverage
 - [ ] Achieve >80% test coverage
-- [ ] Add integration tests with real documents
+- [ ] Add integration tests with real rent roll documents
 - [ ] Performance benchmarks
 
-### 9.2 Documentation
+### 8.2 Documentation
 - [ ] Update README.md with usage examples
-- [ ] Document integration patterns for both apps
+- [ ] Document integration pattern for other_branch
 - [ ] Add API reference documentation
 
-### 9.3 Error Handling
+### 8.3 Error Handling
 - [ ] Comprehensive error messages
 - [ ] Logging with context
 - [ ] User-friendly error responses
@@ -205,31 +190,23 @@
 ### PARSE-N-FILL (Core Module)
 | File | Status | Purpose |
 |------|--------|---------|
-| `src/types/direct-cap-model.ts` | ✅ Complete | Core interfaces |
-| `src/schemas/direct-cap-schema.ts` | ✅ Complete | Zod validation |
+| `src/types/revenue-stream.ts` | TODO | RevenueStream, RevenueRow interfaces |
+| `src/schemas/revenue-stream-schema.ts` | TODO | Zod validation |
 | `src/api/parse-document.ts` | Stub | Main parse API |
 | `src/api/export-excel.ts` | Stub | Excel export API |
 | `src/parsers/*` | ✅ Complete | File parsers (PDF, Excel, CSV, Image) |
 | `src/ai/config.ts` | ✅ Complete | Claude config |
-| `src/ai/prompts/*` | ✅ Complete | System prompts |
-| `src/ai/tools/*` | ✅ Complete | AI tools (extraction, categorization) |
-| `src/agent/*` | Empty | Extraction agent |
+| `src/ai/prompts/*` | Needs Update | System prompts (update for revenue focus) |
+| `src/ai/tools/*` | Needs Revision | AI tools (revenue extraction, categorization) |
+| `src/agent/*` | Empty | Revenue extraction agent |
 | `src/export/*` | Empty | Excel generation |
 | `src/lib/*` | ✅ Complete | Utilities (errors, constants, utils) |
-
-### MAP05 Reference Files (READ-ONLY - Do NOT edit)
-| File | Purpose |
-|------|---------|
-| `src/lib/ai/tools/index.ts` | Reference: Tool factory pattern |
-| `src/lib/file-parser.ts` | Reference: File parsing patterns |
-| `src/app/actions/chat.ts` | Reference: Agent orchestration |
-| `src/db/schema.ts` | Reference: uploadedFiles table schema |
 
 ### other_branch Reference Files (READ-ONLY - Do NOT edit)
 | File | Purpose |
 |------|---------|
-| `src/stores/types.ts` | Reference: RevenueStream, ExpenseRow types |
-| `src/lib/services/financial-calculations.service.ts` | Reference: Financial calculation patterns |
+| `src/stores/types.ts` | Reference: RevenueStream, RevenueRow types |
+| `src/app/(app)/bov/_components/underwriting-tab/income-approach/` | Reference: Income-approach UI structure |
 | `src/app/api/sessions/drafts/[id]/route.ts` | Reference: Session update pattern |
 
 ---
@@ -247,14 +224,49 @@ LOG_LEVEL=debug
 
 ---
 
+## Target Output: RevenueStream
+
+```typescript
+interface RevenueStream {
+  id: string;
+  name: string;                     // "Office Rents", "Parking", etc.
+  category: 'Residential' | 'Commercial' | 'Miscellaneous';
+  notes?: string;
+  order: number;
+  rows: RevenueRow[];
+  vacancyRate?: number;             // 0-100
+  totals?: {
+    grossRevenue: number;
+    effectiveRevenue: number;
+    squareFootage: number;
+  };
+}
+
+interface RevenueRow {
+  id: string;
+  unit: string;                     // "Apt 1A", "Suite 200"
+  squareFeet: number | null;
+  monthlyRate: number | null;
+  annualIncome: number | null;      // monthlyRate * 12
+  effectiveAnnualIncome: number | null;
+  isVacant: boolean;
+  operatingVacancyAndCreditLoss: number;
+  tenantName?: string;
+  marketRent?: number | null;
+  rentVariance?: number | null;
+  leaseExpiry?: string;
+}
+```
+
+---
+
 ## Success Criteria
 
-- [ ] Parse PDF rent rolls and extract revenue line items
-- [ ] Parse Excel operating statements and extract expenses
-- [ ] Output valid DirectCapitalizationRateModel JSON
-- [ ] Generate formatted Excel export
-- [ ] Integrate with MAP05 AI assistant
-- [ ] Integrate with other_branch BOV workflow
+- [ ] Parse PDF rent rolls and extract unit-level revenue data
+- [ ] Parse Excel rent rolls and extract RevenueRow[] data
+- [ ] Output valid RevenueStream[] JSON compatible with other_branch
+- [ ] Generate formatted Excel export matching income-approach format
+- [ ] Integrate with other_branch income-approach revenue page
 - [ ] >80% test coverage
 - [ ] Documentation complete
 
@@ -262,14 +274,14 @@ LOG_LEVEL=debug
 
 ## Notes
 
-> **IMPORTANT: MAP05 and other_branch are READ-ONLY reference projects.**
-> Do NOT edit files in those directories. Study their patterns, but implement all code in PARSE-N-FILL only.
+> **IMPORTANT: other_branch is a READ-ONLY reference project.**
+> Do NOT edit files in that directory. Study its patterns, but implement all code in PARSE-N-FILL only.
 
-- MAP05 uses GPT-5.1 for file parsing; parse-n-fill uses Claude for financial extraction
-- other_branch has no document parsing - parse-n-fill fills this gap completely
-- Both apps use Vercel AI SDK - consistent patterns available
-- Zod validation is standard across all three codebases
-- Integration phases (7 & 8) document HOW to integrate, not tasks to do here
+- PARSE-N-FILL uses Claude for rent roll parsing and revenue extraction
+- other_branch income-approach expects RevenueStream[] with unit-level RevenueRow[] data
+- Vercel AI SDK is used across both codebases - consistent patterns available
+- Zod validation is standard across both codebases
+- Phase 7 documents HOW to integrate, not tasks to do here
 
 ---
 
@@ -279,4 +291,4 @@ LOG_LEVEL=debug
 |------|-------|--------|-------|
 | 2024-12-13 | Phase 1 | ✅ Passed | AI config, prompts, utilities reviewed. Fixed exports and formatCurrency edge case. |
 | 2024-12-14 | Phase 2 | ✅ Passed | Parser layer complete. 4 parsers (PDF, Excel, CSV, Image) with 45 passing tests. Used Claude vision for PDFs/images, ExcelJS/PapaParse for structured files. Fixed AI SDK v5 `maxOutputTokens` param and safe ArrayBuffer handling. |
-| 2025-12-14 | Phase 3 | ✅ Passed | AI tools layer complete. 2 tools (extractFinancialData, categorizeLineItems) with 29 passing tests. Used Vercel AI SDK `tool()` and `generateObject()` for structured extraction. Fixed AI SDK v5 `inputSchema` (not `parameters`) and model type compatibility. Total: 74 tests passing. |
+| 2025-12-17 | Docs | Revised | Pivoted from DirectCapitalizationRateModel to RevenueStream output. Removed MAP05 references. Focus now on other_branch income-approach integration. |

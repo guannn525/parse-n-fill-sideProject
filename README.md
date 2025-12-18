@@ -1,28 +1,50 @@
 # PARSE-N-FILL
 
-A modular financial document parsing API powered by Claude AI. Parse financial documents and extract structured data into the Direct Capitalization Rate Model format.
+A modular rent roll parsing API powered by Claude AI. Parse financial documents and extract structured revenue streams for commercial real estate income-approach analysis.
 
 ## Overview
 
 PARSE-N-FILL is a standalone API module designed to:
 
-1. **Parse** financial documents (PDF, Excel, CSV, images)
-2. **Extract** financial line items using Claude AI vision and reasoning
-3. **Categorize** items into revenue, expenses, and adjustments
-4. **Output** structured JSON following the Direct Capitalization Rate Model
-5. **Export** to Excel with calculations and formulas
+1. **Parse** rent rolls and financial documents (PDF, Excel, CSV, images)
+2. **Extract** unit-level revenue data using Claude AI vision and reasoning
+3. **Categorize** revenue into Residential, Commercial, and Miscellaneous streams
+4. **Output** structured RevenueStream[] JSON compatible with income-approach workflows
+5. **Export** to Excel with unit-level breakdown and totals
 
-## Direct Capitalization Rate Model
+## RevenueStream Model
 
-The core output structure for commercial real estate valuation:
+The core output structure for income-approach revenue analysis:
 
 ```typescript
-interface DirectCapitalizationRateModel {
-  timeStamp: string;                              // ISO timestamp of extraction
-  agentReasoning: string;                         // AI explanation for audit trail
-  annualOperatingRevenue: Record<string, number>; // Revenue line items
-  annualOperatingExpenses: Record<string, number>;// Expense line items
-  oneTimeAdjustment: Record<string, number>;      // One-time adjustments
+interface RevenueStream {
+  id: string;
+  name: string;                     // "Office Rents", "Parking", etc.
+  category: 'Residential' | 'Commercial' | 'Miscellaneous';
+  notes?: string;
+  order: number;
+  rows: RevenueRow[];
+  vacancyRate?: number;             // 0-100
+  totals?: {
+    grossRevenue: number;
+    effectiveRevenue: number;
+    squareFootage: number;
+  };
+}
+
+interface RevenueRow {
+  id: string;
+  unit: string;                     // "Apt 1A", "Suite 200"
+  squareFeet: number | null;
+  monthlyRate: number | null;
+  annualIncome: number | null;      // monthlyRate * 12
+  effectiveAnnualIncome: number | null;
+  isVacant: boolean;
+  operatingVacancyAndCreditLoss: number;
+  tenantName?: string;
+  marketRent?: number | null;
+  rentVariance?: number | null;
+  leaseExpiry?: string;
 }
 ```
 
@@ -30,22 +52,73 @@ interface DirectCapitalizationRateModel {
 
 ```json
 {
-  "timeStamp": "2025-12-12T10:30:00.000Z",
-  "agentReasoning": "Extracted 5 revenue items from rent roll. Identified property taxes and insurance as operating expenses. Deferred maintenance flagged as one-time adjustment based on non-recurring nature.",
-  "annualOperatingRevenue": {
-    "Rental Income": 120000,
-    "Parking Fees": 5000,
-    "Laundry Income": 2400
-  },
-  "annualOperatingExpenses": {
-    "Property Tax": 15000,
-    "Insurance": 8000,
-    "Utilities": 12000,
-    "Management Fee": 6000
-  },
-  "oneTimeAdjustment": {
-    "Deferred Maintenance": -5000,
-    "Capital Reserve": -3000
+  "revenueStreams": [
+    {
+      "id": "stream-1",
+      "name": "Apartment Rents",
+      "category": "Residential",
+      "order": 1,
+      "rows": [
+        {
+          "id": "row-1",
+          "unit": "Apt 1A",
+          "squareFeet": 850,
+          "monthlyRate": 1500,
+          "annualIncome": 18000,
+          "effectiveAnnualIncome": 17100,
+          "isVacant": false,
+          "operatingVacancyAndCreditLoss": 5,
+          "tenantName": "John Smith",
+          "leaseExpiry": "2025-06-30"
+        },
+        {
+          "id": "row-2",
+          "unit": "Apt 1B",
+          "squareFeet": 900,
+          "monthlyRate": 1600,
+          "annualIncome": 19200,
+          "effectiveAnnualIncome": 18240,
+          "isVacant": false,
+          "operatingVacancyAndCreditLoss": 5,
+          "tenantName": "Jane Doe"
+        }
+      ],
+      "vacancyRate": 5,
+      "totals": {
+        "grossRevenue": 37200,
+        "effectiveRevenue": 35340,
+        "squareFootage": 1750
+      }
+    },
+    {
+      "id": "stream-2",
+      "name": "Parking",
+      "category": "Miscellaneous",
+      "order": 2,
+      "rows": [
+        {
+          "id": "row-3",
+          "unit": "Lot A",
+          "squareFeet": null,
+          "monthlyRate": 100,
+          "annualIncome": 1200,
+          "effectiveAnnualIncome": 1200,
+          "isVacant": false,
+          "operatingVacancyAndCreditLoss": 0
+        }
+      ],
+      "totals": {
+        "grossRevenue": 1200,
+        "effectiveRevenue": 1200,
+        "squareFootage": 0
+      }
+    }
+  ],
+  "metadata": {
+    "sourceFileName": "rent-roll.pdf",
+    "processingTimeMs": 2340,
+    "confidence": 0.92,
+    "agentReasoning": "Extracted 2 units from residential rent roll. Identified parking as miscellaneous income based on non-unit naming."
   }
 }
 ```
@@ -77,21 +150,21 @@ ANTHROPIC_API_KEY=your_api_key_here
 ```typescript
 import { parseDocument, exportToExcel } from 'parse-n-fill';
 
-// Parse a financial document
+// Parse a rent roll document
 const result = await parseDocument({
   fileName: "rent-roll.pdf",
   fileType: "application/pdf",
   fileData: base64EncodedFile,
 });
 
-console.log(result.model);
-// DirectCapitalizationRateModel with extracted data
+console.log(result.revenueStreams);
+// RevenueStream[] with unit-level data
 
-console.log(result.calculations);
-// { grossPotentialIncome, totalExpenses, netOperatingIncome, ... }
+console.log(result.metadata);
+// { sourceFileName, processingTimeMs, confidence, agentReasoning }
 
 // Export to Excel
-const excelBuffer = await exportToExcel(result.model);
+const excelBuffer = await exportToExcel(result.revenueStreams);
 ```
 
 ## Tech Stack
@@ -118,7 +191,7 @@ const excelBuffer = await exportToExcel(result.model);
 
 ### `parseDocument(options)`
 
-Parse a financial document and extract structured data.
+Parse a rent roll or financial document and extract revenue streams.
 
 ```typescript
 interface ParseOptions {
@@ -132,24 +205,24 @@ interface ParseOptions {
 
 interface ParseResult {
   success: boolean;
-  model: DirectCapitalizationRateModel;
-  calculations: DirectCapCalculations;
+  revenueStreams: RevenueStream[];
   metadata: {
     sourceFileName: string;
     processingTimeMs: number;
     confidence: number;
+    agentReasoning: string;
   };
 }
 ```
 
-### `exportToExcel(model, options?)`
+### `exportToExcel(revenueStreams, options?)`
 
-Generate an Excel workbook from the model.
+Generate an Excel workbook from revenue streams.
 
 ```typescript
 interface ExportOptions {
   templateName?: "standard" | "detailed";
-  includeCharts?: boolean;
+  includeMetadata?: boolean;
 }
 
 // Returns: Buffer (xlsx file)
@@ -159,24 +232,23 @@ interface ExportOptions {
 
 PARSE-N-FILL is designed to integrate with:
 
-- **MAP05**: Via Server Actions or API routes (Supabase Auth)
-- **other_branch**: Via API routes (Clerk Auth)
+- **other_branch**: Via API routes (Clerk Auth) - populates income-approach revenue page
 
-Both applications can consume this as a standalone module.
+The output RevenueStream[] format is compatible with other_branch's `SubModule.data.revenueStreams` structure.
 
 ## Project Structure
 
 ```
 parse-n-fill/
 ├── src/
-│   ├── types/          # TypeScript interfaces
+│   ├── types/          # TypeScript interfaces (RevenueStream, RevenueRow)
 │   ├── schemas/        # Zod validation schemas
-│   ├── parsers/        # File parsing utilities
+│   ├── parsers/        # File parsing utilities (PDF, Excel, CSV, Image)
 │   ├── ai/
 │   │   ├── config.ts   # Claude model config
-│   │   ├── prompts/    # System prompts
-│   │   └── tools/      # AI agent tools
-│   ├── agent/          # Financial extraction agent
+│   │   ├── prompts/    # System prompts for revenue extraction
+│   │   └── tools/      # AI agent tools (extract, categorize)
+│   ├── agent/          # Revenue extraction agent
 │   ├── export/         # Excel export utilities
 │   ├── api/            # API handlers
 │   └── lib/            # Shared utilities
@@ -211,7 +283,7 @@ Using Claude Sonnet 4.5 with Batch API:
 | 1,000 docs | ~$3.75 | $0.0038 |
 | 10,000 docs | ~$37.50 | $0.0038 |
 
-*Estimates based on 5-page documents with mixed text/images*
+*Estimates based on 5-page rent roll documents with mixed text/images*
 
 ## License
 
@@ -219,5 +291,4 @@ MIT
 
 ## Related Projects
 
-- [MAP05](../MAP05) - Geo-intelligence mapping platform
-- [other_branch](../other_branch) - BOV Generator application
+- [other_branch](../other_branch) - BOV Generator application with income-approach module

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**PARSE-N-FILL** is a modular financial document parsing API powered by Claude AI. It extracts structured financial data from documents (PDF, Excel, CSV, images) and outputs the Direct Capitalization Rate Model format used in commercial real estate valuation.
+**PARSE-N-FILL** is a modular rent roll parsing API powered by Claude AI. It extracts structured revenue stream data from documents (PDF, Excel, CSV, images) and outputs RevenueStream[] format compatible with income-approach commercial real estate analysis.
 
-**Core Purpose**: Parse financial documents → Extract line items → Categorize into revenue/expenses/adjustments → Output auditable JSON
+**Core Purpose**: Parse rent rolls → Extract unit-level revenue data → Categorize into Residential/Commercial/Miscellaneous → Output RevenueStream[] JSON
 
 ## File Organization
 
@@ -15,9 +15,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 src/
 ├── types/              # TypeScript interfaces
-│   └── direct-cap-model.ts
+│   └── revenue-stream.ts
 ├── schemas/            # Zod validation schemas
-│   └── direct-cap-schema.ts
+│   └── revenue-stream-schema.ts
 ├── parsers/            # File parsing utilities
 │   ├── index.ts        # Parser factory
 │   ├── pdf-parser.ts   # Claude vision for PDFs
@@ -29,10 +29,10 @@ src/
 │   ├── prompts/        # System prompts
 │   │   └── extraction-prompt.ts
 │   └── tools/          # AI agent tools
-│       ├── extract-financial-data.ts
-│       └── categorize-line-items.ts
-├── agent/              # Financial extraction agent
-│   └── financial-extraction-agent.ts
+│       ├── extract-revenue-streams.ts
+│       └── categorize-revenue-streams.ts
+├── agent/              # Revenue extraction agent
+│   └── revenue-extraction-agent.ts
 ├── export/             # Excel export utilities
 │   └── excel-export.ts
 ├── api/                # API handlers
@@ -78,11 +78,11 @@ Parser Layer (Claude vision or ExcelJS/PapaParse)
     ↓
 Parsed Text Content
     ↓
-AI Agent (extractFinancialData tool)
+AI Agent (extractRevenueStreams tool)
     ↓
-Categorization (categorizeLineItems tool)
+Categorization (categorizeRevenueStreams tool)
     ↓
-DirectCapitalizationRateModel JSON
+RevenueStream[] JSON
     ↓
 Excel Export (optional)
 ```
@@ -90,12 +90,34 @@ Excel Export (optional)
 ### Core Interface
 
 ```typescript
-interface DirectCapitalizationRateModel {
-  timeStamp: string;                              // ISO timestamp
-  agentReasoning: string;                         // AI explanation for audit
-  annualOperatingRevenue: Record<string, number>; // Revenue items
-  annualOperatingExpenses: Record<string, number>;// Expense items
-  oneTimeAdjustment: Record<string, number>;      // One-time adjustments
+interface RevenueStream {
+  id: string;
+  name: string;                     // "Office Rents", "Parking", etc.
+  category: 'Residential' | 'Commercial' | 'Miscellaneous';
+  notes?: string;
+  order: number;
+  rows: RevenueRow[];
+  vacancyRate?: number;             // 0-100
+  totals?: {
+    grossRevenue: number;
+    effectiveRevenue: number;
+    squareFootage: number;
+  };
+}
+
+interface RevenueRow {
+  id: string;
+  unit: string;                     // "Apt 1A", "Suite 200"
+  squareFeet: number | null;
+  monthlyRate: number | null;
+  annualIncome: number | null;      // monthlyRate * 12
+  effectiveAnnualIncome: number | null;
+  isVacant: boolean;
+  operatingVacancyAndCreditLoss: number;
+  tenantName?: string;
+  marketRent?: number | null;
+  rentVariance?: number | null;
+  leaseExpiry?: string;
 }
 ```
 
@@ -145,11 +167,11 @@ LOG_LEVEL=debug                         # Enable debug logging
 
 | Type | Convention | Example |
 |------|------------|---------|
-| Files | kebab-case | `direct-cap-model.ts` |
-| Interfaces | PascalCase | `DirectCapitalizationRateModel` |
+| Files | kebab-case | `revenue-stream.ts` |
+| Interfaces | PascalCase | `RevenueStream` |
 | Functions | camelCase | `parseDocument` |
 | Constants | UPPER_SNAKE | `SUPPORTED_FILE_TYPES` |
-| AI Tools | camelCase verb+noun | `extractFinancialData` |
+| AI Tools | camelCase verb+noun | `extractRevenueStreams` |
 
 ### AI Tool Pattern
 
@@ -194,23 +216,10 @@ npm test -- pdf-parser     # Specific file
 
 ## Integration Points
 
-### MAP05 Integration
-
-```typescript
-// In MAP05: src/app/api/parse-financial/route.ts
-import { parseDocument } from 'parse-n-fill';
-
-export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const result = await parseDocument(body);
-  return NextResponse.json(result);
-}
-```
-
 ### other_branch Integration
 
 ```typescript
-// In other_branch: src/app/api/parse/route.ts
+// In other_branch: src/app/api/parse-document/route.ts
 import { parseDocument } from 'parse-n-fill';
 import { auth } from "@clerk/nextjs/server";
 
@@ -219,8 +228,24 @@ export async function POST(request: Request) {
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const body = await request.json();
-  return Response.json(await parseDocument(body));
+  const result = await parseDocument(body);
+
+  // result.revenueStreams is compatible with SubModule.data.revenueStreams
+  return Response.json(result);
 }
+```
+
+### Mapping to other_branch Types
+
+The output RevenueStream[] format is designed to be compatible with other_branch's income-approach module:
+
+```typescript
+// PARSE-N-FILL output maps directly to other_branch types
+// other_branch: src/stores/types.ts
+
+// RevenueStream → SubModule.data.revenueStreams
+// RevenueRow → individual rows within each stream
+// category: 'Residential' | 'Commercial' | 'Miscellaneous'
 ```
 
 ## Git Workflow
@@ -249,26 +274,23 @@ docs(readme): update API examples
 
 ## Reference Projects
 
-> **IMPORTANT: READ-ONLY REFERENCES**
+> **IMPORTANT: READ-ONLY REFERENCE**
 >
-> The following projects are included **FOR REFERENCE ONLY**. Do NOT modify, edit, or commit changes to these codebases. Any changes made to MAP05 or other_branch will be wasted effort - they are separate production applications with their own development workflows.
+> The following project is included **FOR REFERENCE ONLY**. Do NOT modify, edit, or commit changes to this codebase. It is a separate production application with its own development workflow.
 
 This project adapts patterns from:
 
-- **MAP05** (`/mnt/c/PARSE-N-FILL/MAP05/`) - Reference for AI tools, file parsing patterns
-  - Study: `src/lib/file-parser.ts`, `src/lib/ai/tools/`
-  - DO NOT EDIT - read-only reference
-
-- **other_branch** (`/mnt/c/PARSE-N-FILL/other_branch/`) - Reference for financial calculation patterns
-  - Study: `src/stores/types.ts`, `src/lib/services/`
+- **other_branch** (`/mnt/c/PARSE-N-FILL/other_branch/`) - Reference for income-approach types and revenue stream structure
+  - Study: `src/stores/types.ts` (RevenueStream, RevenueRow interfaces)
+  - Study: `src/app/(app)/bov/_components/underwriting-tab/income-approach/` (UI structure)
   - DO NOT EDIT - read-only reference
 
 When implementing features in PARSE-N-FILL, you may:
-- Read and study patterns from these projects
-- Copy/adapt code snippets into PARSE-N-FILL
-- Reference their architecture decisions
+- Read and study patterns from other_branch
+- Copy/adapt type definitions into PARSE-N-FILL
+- Reference its architecture decisions
 
 You must NOT:
-- Edit files in MAP05/ or other_branch/
-- Create commits in those directories
-- Run their dev servers or tests (unless explicitly asked)
+- Edit files in other_branch/
+- Create commits in that directory
+- Run its dev server or tests (unless explicitly asked)

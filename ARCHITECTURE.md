@@ -4,7 +4,7 @@ Technical architecture documentation for PARSE-N-FILL.
 
 ## System Overview
 
-PARSE-N-FILL is a modular financial document parsing system that uses Claude AI to extract structured data from various document formats and output a standardized Direct Capitalization Rate Model.
+PARSE-N-FILL is a modular rent roll parsing system that uses Claude AI to extract structured revenue stream data from various document formats and output RevenueStream[] compatible with income-approach analysis.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -15,21 +15,19 @@ PARSE-N-FILL is a modular financial document parsing system that uses Claude AI 
 │  │   Input     │    │   Parser    │    │      AI Agent           │ │
 │  │  Documents  │───▶│   Layer     │───▶│  (Claude Sonnet 4.5)    │ │
 │  │             │    │             │    │                         │ │
-│  │  • PDF      │    │  • Vision   │    │  • Extract line items   │ │
-│  │  • Excel    │    │  • ExcelJS  │    │  • Categorize items     │ │
+│  │  • PDF      │    │  • Vision   │    │  • Extract revenue rows │ │
+│  │  • Excel    │    │  • ExcelJS  │    │  • Categorize streams   │ │
 │  │  • CSV      │    │  • PapaParse│    │  • Generate reasoning   │ │
 │  │  • Images   │    │             │    │                         │ │
 │  └─────────────┘    └─────────────┘    └───────────┬─────────────┘ │
 │                                                     │               │
 │                                                     ▼               │
 │                     ┌─────────────────────────────────────────────┐ │
-│                     │         DirectCapitalizationRateModel       │ │
+│                     │              RevenueStream[]                │ │
 │                     │                                             │ │
-│                     │  • timeStamp                                │ │
-│                     │  • agentReasoning                           │ │
-│                     │  • annualOperatingRevenue                   │ │
-│                     │  • annualOperatingExpenses                  │ │
-│                     │  • oneTimeAdjustment                        │ │
+│                     │  • id, name, category                       │ │
+│                     │  • rows: RevenueRow[]                       │ │
+│                     │  • vacancyRate, totals                      │ │
 │                     └───────────────────────┬─────────────────────┘ │
 │                                             │                       │
 │                                             ▼                       │
@@ -37,9 +35,9 @@ PARSE-N-FILL is a modular financial document parsing system that uses Claude AI 
 │                     │            Excel Export (ExcelJS)           │ │
 │                     │                                             │ │
 │                     │  Sheet 1: Summary                           │ │
-│                     │  Sheet 2: Revenue Detail                    │ │
-│                     │  Sheet 3: Expense Detail                    │ │
-│                     │  Sheet 4: Adjustments                       │ │
+│                     │  Sheet 2: Residential Revenue               │ │
+│                     │  Sheet 3: Commercial Revenue                │ │
+│                     │  Sheet 4: Miscellaneous Revenue             │ │
 │                     │  Sheet 5: Calculations (with formulas)      │ │
 │                     └─────────────────────────────────────────────┘ │
 │                                                                     │
@@ -55,13 +53,13 @@ parse-n-fill/
 │   │
 │   ├── types/                      # TypeScript type definitions
 │   │   ├── index.ts                # Re-exports
-│   │   ├── direct-cap-model.ts     # Core model interfaces
+│   │   ├── revenue-stream.ts       # Core model interfaces
 │   │   ├── file-types.ts           # File/MIME type constants
 │   │   └── api-types.ts            # Request/response types
 │   │
 │   ├── schemas/                    # Zod validation schemas
 │   │   ├── index.ts                # Re-exports
-│   │   ├── direct-cap-schema.ts    # Model validation
+│   │   ├── revenue-stream-schema.ts # Model validation
 │   │   └── request-schema.ts       # API request validation
 │   │
 │   ├── parsers/                    # File parsing layer
@@ -80,19 +78,19 @@ parse-n-fill/
 │   │   │   └── categorization-prompt.ts
 │   │   └── tools/                  # AI agent tools
 │   │       ├── index.ts
-│   │       ├── extract-financial-data.ts
-│   │       ├── categorize-line-items.ts
+│   │       ├── extract-revenue-streams.ts
+│   │       ├── categorize-revenue-streams.ts
 │   │       └── validate-extraction.ts
 │   │
 │   ├── agent/                      # Agent orchestration
 │   │   ├── index.ts
-│   │   └── financial-extraction-agent.ts
+│   │   └── revenue-extraction-agent.ts
 │   │
 │   ├── export/                     # Export functionality
 │   │   ├── index.ts
 │   │   ├── excel-export.ts         # ExcelJS workbook generation
 │   │   └── templates/
-│   │       └── direct-cap-template.ts
+│   │       └── revenue-template.ts
 │   │
 │   ├── api/                        # API handlers
 │   │   ├── index.ts
@@ -172,24 +170,25 @@ Tools follow the Vercel AI SDK pattern:
 import { tool } from "ai";
 import { z } from "zod";
 
-export const extractFinancialDataTool = tool({
-  description: `Extract financial line items from document content.
+export const extractRevenueStreamsTool = tool({
+  description: `Extract revenue data from rent roll content.
 
   Identifies:
-  - Revenue items (rent, fees, other income)
-  - Expense items (taxes, insurance, maintenance)
-  - Adjustment items (capital reserves, deferred maintenance)`,
+  - Unit identifiers (Apt 1A, Suite 200, etc.)
+  - Square footage per unit
+  - Monthly rates and annual income
+  - Vacancy status and tenant names`,
 
   inputSchema: z.object({
     content: z.string().describe("Parsed document content"),
-    focusArea: z.enum(["revenue", "expenses", "adjustments", "all"]).default("all"),
+    category: z.enum(["Residential", "Commercial", "Miscellaneous", "all"]).default("all"),
   }),
 
-  execute: async ({ content, focusArea }) => {
-    // Extract line items from content
+  execute: async ({ content, category }) => {
+    // Extract revenue rows from content
     return {
       success: true,
-      lineItems: [...],
+      rows: [...],
       confidence: 0.85,
     };
   },
@@ -198,29 +197,29 @@ export const extractFinancialDataTool = tool({
 
 ### 3. Agent Layer (`src/agent/`)
 
-The financial extraction agent orchestrates the parsing workflow.
+The revenue extraction agent orchestrates the parsing workflow.
 
 ```typescript
 import { generateText } from "ai";
 import { aiModel, AI_CONFIG } from "../ai/config";
-import { extractFinancialDataTool, categorizeLineItemsTool } from "../ai/tools";
+import { extractRevenueStreamsTool, categorizeRevenueStreamsTool } from "../ai/tools";
 
-export async function runFinancialExtractionAgent(
+export async function runRevenueExtractionAgent(
   parsedContent: string,
   fileName: string
-): Promise<DirectCapResult> {
+): Promise<ParseResult> {
   const result = await generateText({
     model: aiModel,
     maxSteps: AI_CONFIG.maxSteps,
     tools: {
-      extractFinancialData: extractFinancialDataTool,
-      categorizeLineItems: categorizeLineItemsTool,
+      extractRevenueStreams: extractRevenueStreamsTool,
+      categorizeRevenueStreams: categorizeRevenueStreamsTool,
     },
     system: getExtractionSystemPrompt(),
     prompt: buildExtractionPrompt(parsedContent, fileName),
   });
 
-  return extractModelFromResult(result);
+  return extractResultFromResponse(result);
 }
 ```
 
@@ -232,23 +231,24 @@ Excel workbook generation with formulas:
 import ExcelJS from "exceljs";
 
 export async function generateExcelWorkbook(
-  result: DirectCapResult
+  revenueStreams: RevenueStream[]
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
 
   // Sheet 1: Summary
   const summarySheet = workbook.addWorksheet("Summary");
-  addSummarySheet(summarySheet, result);
+  addSummarySheet(summarySheet, revenueStreams);
 
-  // Sheet 2-4: Detail sheets
-  addDetailSheet(workbook, "Revenue", result.model.annualOperatingRevenue);
-  addDetailSheet(workbook, "Expenses", result.model.annualOperatingExpenses);
-  addDetailSheet(workbook, "Adjustments", result.model.oneTimeAdjustment);
+  // Sheet 2-4: Category sheets
+  for (const stream of revenueStreams) {
+    const sheet = workbook.addWorksheet(stream.name);
+    addRevenueStreamSheet(sheet, stream);
+  }
 
   // Sheet 5: Calculations with Excel formulas
   const calcSheet = workbook.addWorksheet("Calculations");
-  calcSheet.getCell("A1").value = "Net Operating Income";
-  calcSheet.getCell("B1").value = { formula: "SUM(Revenue!B:B)-SUM(Expenses!B:B)" };
+  calcSheet.getCell("A1").value = "Total Gross Revenue";
+  calcSheet.getCell("B1").value = { formula: "SUM(Summary!B:B)" };
 
   return workbook.xlsx.writeBuffer() as Promise<Buffer>;
 }
@@ -256,54 +256,88 @@ export async function generateExcelWorkbook(
 
 ## Type Definitions
 
-### Core Types (`src/types/direct-cap-model.ts`)
+### Core Types (`src/types/revenue-stream.ts`)
 
 ```typescript
 /**
- * Direct Capitalization Rate Model
- * Core output structure for financial document parsing
+ * Revenue Stream Category
  */
-export interface DirectCapitalizationRateModel {
-  /** ISO 8601 timestamp of extraction */
-  timeStamp: string;
-
-  /** Agent's reasoning for audit trail */
-  agentReasoning: string;
-
-  /** Annual operating revenue line items */
-  annualOperatingRevenue: Record<string, number>;
-
-  /** Annual operating expenses line items */
-  annualOperatingExpenses: Record<string, number>;
-
-  /** One-time adjustments (positive or negative) */
-  oneTimeAdjustment: Record<string, number>;
-}
+export type RevenueStreamCategory = 'Residential' | 'Commercial' | 'Miscellaneous';
 
 /**
- * Calculated metrics derived from the model
+ * Revenue Stream
+ * A categorized collection of revenue rows
  */
-export interface DirectCapCalculations {
-  grossPotentialIncome: number;
-  effectiveGrossIncome: number;
-  totalOperatingExpenses: number;
-  netOperatingIncome: number;
-  totalAdjustments: number;
-  adjustedValue: number | null;
-}
+export interface RevenueStream {
+  /** Unique identifier */
+  id: string;
 
-/**
- * Complete result with model and calculations
- */
-export interface DirectCapResult {
-  model: DirectCapitalizationRateModel;
-  calculations: DirectCapCalculations;
-  metadata: {
-    sourceFileName: string;
-    sourceFileType: string;
-    processingTimeMs: number;
-    confidence: number;  // 0-1 score
+  /** User-defined name: "Office Rents", "Parking", etc. */
+  name: string;
+
+  /** Category for grouping */
+  category: RevenueStreamCategory;
+
+  /** Optional description */
+  notes?: string;
+
+  /** Display order */
+  order: number;
+
+  /** Individual revenue items */
+  rows: RevenueRow[];
+
+  /** Section-level vacancy rate (0-100) */
+  vacancyRate?: number;
+
+  /** Calculated totals */
+  totals?: {
+    grossRevenue: number;
+    effectiveRevenue: number;
+    squareFootage: number;
   };
+}
+
+/**
+ * Revenue Row
+ * Individual unit/lease data within a stream
+ */
+export interface RevenueRow {
+  /** Unique identifier */
+  id: string;
+
+  /** Unit identifier: "Apt 1A", "Suite 200" */
+  unit: string;
+
+  /** Square footage */
+  squareFeet: number | null;
+
+  /** Monthly rent rate */
+  monthlyRate: number | null;
+
+  /** Annual income (monthlyRate * 12) */
+  annualIncome: number | null;
+
+  /** Effective annual income after vacancy */
+  effectiveAnnualIncome: number | null;
+
+  /** Whether unit is vacant */
+  isVacant: boolean;
+
+  /** Combined vacancy/credit loss % (0-100) */
+  operatingVacancyAndCreditLoss: number;
+
+  /** Tenant name if occupied */
+  tenantName?: string;
+
+  /** Market rent for comparison */
+  marketRent?: number | null;
+
+  /** Variance from market rent */
+  rentVariance?: number | null;
+
+  /** Lease expiration date (ISO string) */
+  leaseExpiry?: string;
 }
 ```
 
@@ -321,16 +355,22 @@ export interface ParseDocumentRequest {
 
 export interface ParseDocumentResponse {
   success: boolean;
-  result?: DirectCapResult;
+  revenueStreams?: RevenueStream[];
+  metadata?: {
+    sourceFileName: string;
+    processingTimeMs: number;
+    confidence: number;
+    agentReasoning: string;
+  };
   rawText?: string;
   error?: string;
 }
 
 export interface ExportExcelRequest {
-  model: DirectCapitalizationRateModel;
+  revenueStreams: RevenueStream[];
   options?: {
     templateName?: "standard" | "detailed";
-    includeCharts?: boolean;
+    includeMetadata?: boolean;
   };
 }
 ```
@@ -339,7 +379,7 @@ export interface ExportExcelRequest {
 
 ### POST `/api/parse`
 
-Parse a financial document.
+Parse a rent roll document.
 
 **Request:**
 ```json
@@ -357,74 +397,65 @@ Parse a financial document.
 ```json
 {
   "success": true,
-  "result": {
-    "model": {
-      "timeStamp": "2025-12-12T10:30:00.000Z",
-      "agentReasoning": "Extracted 5 revenue items...",
-      "annualOperatingRevenue": { "Rental Income": 120000 },
-      "annualOperatingExpenses": { "Property Tax": 15000 },
-      "oneTimeAdjustment": { "Deferred Maintenance": -5000 }
-    },
-    "calculations": {
-      "grossPotentialIncome": 127400,
-      "totalOperatingExpenses": 41000,
-      "netOperatingIncome": 86400
-    },
-    "metadata": {
-      "sourceFileName": "rent-roll.pdf",
-      "processingTimeMs": 2340,
-      "confidence": 0.92
+  "revenueStreams": [
+    {
+      "id": "stream-1",
+      "name": "Apartment Rents",
+      "category": "Residential",
+      "order": 1,
+      "rows": [
+        {
+          "id": "row-1",
+          "unit": "Apt 1A",
+          "squareFeet": 850,
+          "monthlyRate": 1500,
+          "annualIncome": 18000,
+          "effectiveAnnualIncome": 17100,
+          "isVacant": false,
+          "operatingVacancyAndCreditLoss": 5,
+          "tenantName": "John Smith"
+        }
+      ],
+      "vacancyRate": 5,
+      "totals": {
+        "grossRevenue": 18000,
+        "effectiveRevenue": 17100,
+        "squareFootage": 850
+      }
     }
+  ],
+  "metadata": {
+    "sourceFileName": "rent-roll.pdf",
+    "processingTimeMs": 2340,
+    "confidence": 0.92,
+    "agentReasoning": "Extracted 1 residential unit from rent roll..."
   }
 }
 ```
 
 ### POST `/api/export`
 
-Export model to Excel.
+Export revenue streams to Excel.
 
 **Request:**
 ```json
 {
-  "model": { ... DirectCapitalizationRateModel },
+  "revenueStreams": [ ... ],
   "options": {
     "templateName": "standard",
-    "includeCharts": true
+    "includeMetadata": true
   }
 }
 ```
 
 **Response:** Binary Excel file (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)
 
-## Integration Patterns
-
-### MAP05 Integration
-
-```typescript
-// MAP05: src/app/api/parse-financial/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { parseDocument } from "parse-n-fill";
-
-export async function POST(request: NextRequest) {
-  // Auth check (Supabase)
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await request.json();
-  const result = await parseDocument(body);
-
-  return NextResponse.json(result);
-}
-```
+## Integration Pattern
 
 ### other_branch Integration
 
 ```typescript
-// other_branch: src/app/api/parse/route.ts
+// other_branch: src/app/api/parse-document/route.ts
 import { auth } from "@clerk/nextjs/server";
 import { parseDocument } from "parse-n-fill";
 
@@ -438,6 +469,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const result = await parseDocument(body);
 
+  // result.revenueStreams maps to SubModule.data.revenueStreams
   return Response.json(result);
 }
 ```
@@ -505,7 +537,7 @@ export class ExportError extends ParseNFillError {
 // Consider caching parsed content for repeated queries
 interface CacheEntry {
   parsedContent: string;
-  model: DirectCapitalizationRateModel;
+  revenueStreams: RevenueStream[];
   expiresAt: number;
 }
 ```
@@ -534,10 +566,10 @@ import { parsePDF } from "./pdf-parser";
 
 describe("PDF Parser", () => {
   it("should extract text from PDF", async () => {
-    const buffer = await readFixture("sample-invoice.pdf");
-    const result = await parsePDF(buffer, "sample-invoice.pdf");
+    const buffer = await readFixture("sample-rent-roll.pdf");
+    const result = await parsePDF(buffer, "sample-rent-roll.pdf");
 
-    expect(result.text).toContain("Invoice");
+    expect(result.text).toContain("Unit");
     expect(result.text.length).toBeGreaterThan(0);
   });
 });
@@ -546,14 +578,15 @@ describe("PDF Parser", () => {
 ### Integration Tests
 
 ```typescript
-// src/agent/__tests__/financial-extraction.test.ts
-describe("Financial Extraction Agent", () => {
-  it("should extract and categorize line items", async () => {
+// src/agent/__tests__/revenue-extraction.test.ts
+describe("Revenue Extraction Agent", () => {
+  it("should extract and categorize revenue streams", async () => {
     const content = readFixture("parsed-rent-roll.txt");
-    const result = await runFinancialExtractionAgent(content, "rent-roll.pdf");
+    const result = await runRevenueExtractionAgent(content, "rent-roll.pdf");
 
-    expect(result.model.annualOperatingRevenue).toBeDefined();
-    expect(Object.keys(result.model.annualOperatingRevenue).length).toBeGreaterThan(0);
+    expect(result.revenueStreams).toBeDefined();
+    expect(result.revenueStreams.length).toBeGreaterThan(0);
+    expect(result.revenueStreams[0].rows.length).toBeGreaterThan(0);
   });
 });
 ```
@@ -561,7 +594,7 @@ describe("Financial Extraction Agent", () => {
 ## Future Considerations
 
 1. **Batch Processing**: Support for multiple documents in single request
-2. **Template System**: Custom extraction templates for different document types
+2. **Template System**: Custom extraction templates for different rent roll formats
 3. **Webhook Support**: Async processing with completion notifications
 4. **Multi-Model**: Fallback to alternative models (GPT-4V, Gemini)
 5. **Self-Hosted**: Option to run with local models for data sensitivity
