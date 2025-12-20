@@ -34,8 +34,6 @@ src/
 │       └── categorize-line-items.ts
 ├── agent/              # Revenue extraction agent
 │   └── revenue-extraction-agent.ts
-├── export/             # Excel export utilities
-│   └── excel-export.ts
 ├── api/                # API handlers
 │   ├── parse-document.ts
 │   └── export-excel.ts
@@ -53,21 +51,20 @@ src/
 - **AI Tools** → `src/ai/tools/`
 - **AI Prompts** → `src/ai/prompts/`
 - **Agent Logic** → `src/agent/`
-- **Excel Export** → `src/export/`
 - **API Handlers** → `src/api/`
 - **Utilities** → `src/lib/`
 
 ## Key Technologies
 
-| Technology        | Version   | Purpose                                 |
-| ----------------- | --------- | --------------------------------------- |
-| **Gemini API**    | Flash 2.0 | Document parsing & reasoning            |
-| **Vercel AI SDK** | 5.x       | AI integration (`ai`, `@ai-sdk/google`) |
-| **TypeScript**    | 5.x       | Type safety (strict mode)               |
-| **Zod**           | 3.x       | Runtime validation                      |
-| **ExcelJS**       | 4.x       | Excel file parsing & generation         |
-| **PapaParse**     | 5.x       | CSV parsing                             |
-| **Vitest**        | 4.x       | Testing framework                       |
+| Technology        | Version           | Purpose                                 |
+| ----------------- | ----------------- | --------------------------------------- |
+| **Gemini API**    | 3 Flash (Preview) | Document parsing & reasoning            |
+| **Vercel AI SDK** | 5.x               | AI integration (`ai`, `@ai-sdk/google`) |
+| **TypeScript**    | 5.x               | Type safety (strict mode)               |
+| **Zod**           | 3.x               | Runtime validation                      |
+| **ExcelJS**       | 4.x               | Excel file parsing & generation         |
+| **PapaParse**     | 5.x               | CSV parsing                             |
+| **Vitest**        | 4.x               | Testing framework                       |
 
 ## Architecture Overview
 
@@ -84,8 +81,6 @@ AI Agent (extractRevenueStreams tool)
     ↓ (extraction + categorization in one step)
     ↓
 RevenueStream[] JSON (with categories assigned)
-    ↓
-Excel Export (optional)
 ```
 
 ### Core Interface
@@ -114,7 +109,7 @@ interface RevenueRow {
 ### AI Agent Design
 
 - **Principle**: "Agents decide, tools execute"
-- **Model**: Gemini Flash 2.0 (default) or Gemini Pro 2.0 (complex documents)
+- **Model**: Gemini 3 Flash Preview (default) or Gemini 2.0 Pro (complex documents)
 - **Tools**: Use Vercel AI SDK tool pattern with Zod schemas
 - **Prompts**: Centralized in `src/ai/prompts/`
 
@@ -141,8 +136,8 @@ GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
 Optional:
 
 ```bash
-GEMINI_MODEL=gemini-2.0-flash-exp  # Override default model
-LOG_LEVEL=debug                     # Enable debug logging
+GEMINI_MODEL=gemini-3-flash-preview  # Override default model
+LOG_LEVEL=debug                      # Enable debug logging
 ```
 
 ## Code Style & Quality

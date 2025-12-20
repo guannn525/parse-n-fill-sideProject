@@ -18,14 +18,14 @@ execute: async ({ content }) => {
     return { category: "Residential" };
   }
   // This misses edge cases like "apt-style offices"
-}
+};
 
 // GOOD: Tool returns data, agent decides
 execute: async ({ content }) => {
   // Return all matches, let agent categorize
   const matches = extractAllRevenueRows(content);
   return { matches, metadata: { count: matches.length } };
-}
+};
 ```
 
 ## Agent Architecture
@@ -48,9 +48,7 @@ export async function runRevenueExtractionAgent(
     model: aiModel,
     maxSteps: AI_CONFIG.maxSteps,
     tools: {
-      extractRevenueRows: extractRevenueRowsTool,
-      categorizeRevenueStreams: categorizeRevenueStreamsTool,
-      validateExtraction: validateExtractionTool,
+      extractRevenueStreams: extractRevenueStreamsTool,
     },
     system: getExtractionSystemPrompt(),
     prompt: buildExtractionPrompt(parsedContent, fileName),
@@ -71,22 +69,19 @@ export async function runRevenueExtractionAgent(
 ### Orchestration Flow
 
 ```
-Step 1: extractRevenueRows
+Step 1: extractRevenueStreams
    ↓
-   Agent analyzes extracted unit data
+   AI extracts unit data AND categorizes into streams
+   (Residential/Commercial/Miscellaneous)
    ↓
-Step 2: categorizeRevenueStreams
-   ↓
-   Agent groups rows into Residential/Commercial/Miscellaneous
-   ↓
-Step 3: validateExtraction
-   ↓
-   Agent confirms or corrects
-   ↓
-Final: RevenueStream[] output
+Final: RevenueStream[] output with validation
 ```
 
+**Note:** The current implementation uses a single `extractRevenueStreams` tool that handles both extraction and categorization in one step. This is more efficient than the multi-tool approach shown in some examples below.
+
 ## Tool Definitions
+
+**Implementation Note:** The examples below show both the actual implementation (`extractRevenueStreams`) and conceptual reference patterns for multi-tool architectures.
 
 ### Tool Design Pattern
 
@@ -144,7 +139,8 @@ export const extractRevenueRowsTool = tool({
 
   inputSchema: z.object({
     content: z.string().describe("Parsed document text content"),
-    focusArea: z.enum(["Residential", "Commercial", "Miscellaneous", "all"])
+    focusArea: z
+      .enum(["Residential", "Commercial", "Miscellaneous", "all"])
       .default("all")
       .describe("Focus extraction on specific category"),
   }),
@@ -188,13 +184,17 @@ export const categorizeRevenueStreamsTool = tool({
   Uses commercial real estate domain knowledge for categorization.`,
 
   inputSchema: z.object({
-    rows: z.array(z.object({
-      unit: z.string(),
-      squareFeet: z.number().nullable(),
-      monthlyRate: z.number().nullable(),
-      tenantName: z.string().optional(),
-      context: z.string().optional(),
-    })).describe("Revenue rows to categorize"),
+    rows: z
+      .array(
+        z.object({
+          unit: z.string(),
+          squareFeet: z.number().nullable(),
+          monthlyRate: z.number().nullable(),
+          tenantName: z.string().optional(),
+          context: z.string().optional(),
+        })
+      )
+      .describe("Revenue rows to categorize"),
   }),
 
   execute: async ({ rows }) => {
@@ -265,21 +265,30 @@ export const validateExtractionTool = tool({
   - Duplicate detection (same unit appearing twice)`,
 
   inputSchema: z.object({
-    streams: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      category: z.enum(["Residential", "Commercial", "Miscellaneous"]),
-      rows: z.array(z.object({
-        unit: z.string(),
-        squareFeet: z.number().nullable(),
-        monthlyRate: z.number().nullable(),
-        annualIncome: z.number().nullable(),
-      })),
-    })).describe("The RevenueStream[] to validate"),
-    expectedTotals: z.object({
-      totalGrossRevenue: z.number().optional(),
-      totalUnits: z.number().optional(),
-    }).optional().describe("Expected totals from document for verification"),
+    streams: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          category: z.enum(["Residential", "Commercial", "Miscellaneous"]),
+          rows: z.array(
+            z.object({
+              unit: z.string(),
+              squareFeet: z.number().nullable(),
+              monthlyRate: z.number().nullable(),
+              annualIncome: z.number().nullable(),
+            })
+          ),
+        })
+      )
+      .describe("The RevenueStream[] to validate"),
+    expectedTotals: z
+      .object({
+        totalGrossRevenue: z.number().optional(),
+        totalUnits: z.number().optional(),
+      })
+      .optional()
+      .describe("Expected totals from document for verification"),
   }),
 
   execute: async ({ streams, expectedTotals }) => {
@@ -317,14 +326,18 @@ export const validateExtractionTool = tool({
     // Verify against expected totals
     if (expectedTotals?.totalUnits) {
       if (totalUnits !== expectedTotals.totalUnits) {
-        issues.push(`Unit count (${totalUnits}) doesn't match expected (${expectedTotals.totalUnits})`);
+        issues.push(
+          `Unit count (${totalUnits}) doesn't match expected (${expectedTotals.totalUnits})`
+        );
       }
     }
 
     if (expectedTotals?.totalGrossRevenue) {
       const diff = Math.abs(totalGrossRevenue - expectedTotals.totalGrossRevenue);
       if (diff > 1) {
-        issues.push(`Revenue sum ($${totalGrossRevenue}) doesn't match expected ($${expectedTotals.totalGrossRevenue})`);
+        issues.push(
+          `Revenue sum ($${totalGrossRevenue}) doesn't match expected ($${expectedTotals.totalGrossRevenue})`
+        );
       }
     }
 
@@ -396,12 +409,12 @@ Return the complete RevenueStream[] array.`;
 
 ### Prompt Token Budget
 
-| Component | Token Budget | Notes |
-|-----------|-------------|-------|
-| System prompt | <500 | Sent with every request |
-| Tool descriptions | <200 each | Only sent when considering tool |
-| User prompt | Variable | Include document content |
-| Reserved for response | ~4000 | Agent reasoning + structured output |
+| Component             | Token Budget | Notes                               |
+| --------------------- | ------------ | ----------------------------------- |
+| System prompt         | <500         | Sent with every request             |
+| Tool descriptions     | <200 each    | Only sent when considering tool     |
+| User prompt           | Variable     | Include document content            |
+| Reserved for response | ~4000        | Agent reasoning + structured output |
 
 ## Error Handling in Agents
 
@@ -426,7 +439,7 @@ execute: async (input) => {
       },
     };
   }
-}
+};
 ```
 
 ### Agent-Level Error Handling
@@ -465,30 +478,30 @@ export async function runRevenueExtractionAgent(
 
 ### Revenue Stream Categories
 
-| Category | Examples | Indicators |
-|----------|----------|------------|
-| Residential | Apartments, Units, Bedrooms | "Apt", "Unit", "BR", "Bedroom" |
-| Commercial | Offices, Retail, Suites | "Suite", "Office", "Floor", "Retail" |
-| Miscellaneous | Parking, Storage, Laundry | "Parking", "Storage", "Laundry" |
+| Category      | Examples                    | Indicators                           |
+| ------------- | --------------------------- | ------------------------------------ |
+| Residential   | Apartments, Units, Bedrooms | "Apt", "Unit", "BR", "Bedroom"       |
+| Commercial    | Offices, Retail, Suites     | "Suite", "Office", "Floor", "Retail" |
+| Miscellaneous | Parking, Storage, Laundry   | "Parking", "Storage", "Laundry"      |
 
 ### Common Rent Roll Fields
 
-| Field | Examples | Notes |
-|-------|----------|-------|
-| Unit ID | Apt 1A, Suite 200, Space 101 | Primary identifier |
-| Square Feet | 850 SF, 1,200 sq ft | Rentable area |
-| Monthly Rent | $1,500/mo, $2,000 | Base rent amount |
-| Tenant Name | John Smith, ABC Corp | Occupancy indicator |
-| Lease Expiry | 12/31/2025, Dec 2025 | Lease term info |
-| Vacancy Status | Vacant, Occupied | Explicit or inferred |
+| Field          | Examples                     | Notes                |
+| -------------- | ---------------------------- | -------------------- |
+| Unit ID        | Apt 1A, Suite 200, Space 101 | Primary identifier   |
+| Square Feet    | 850 SF, 1,200 sq ft          | Rentable area        |
+| Monthly Rent   | $1,500/mo, $2,000            | Base rent amount     |
+| Tenant Name    | John Smith, ABC Corp         | Occupancy indicator  |
+| Lease Expiry   | 12/31/2025, Dec 2025         | Lease term info      |
+| Vacancy Status | Vacant, Occupied             | Explicit or inferred |
 
 ### Calculated Fields
 
-| Field | Formula | Notes |
-|-------|---------|-------|
-| Annual Income | monthlyRate * 12 | Gross annual |
-| Effective Income | annualIncome * (1 - vacancyRate/100) | After vacancy |
-| Rent/SF | monthlyRate / squareFeet | Unit economics |
+| Field            | Formula                               | Notes          |
+| ---------------- | ------------------------------------- | -------------- |
+| Annual Income    | monthlyRate \* 12                     | Gross annual   |
+| Effective Income | annualIncome \* (1 - vacancyRate/100) | After vacancy  |
+| Rent/SF          | monthlyRate / squareFeet              | Unit economics |
 
 ## Testing Agents
 
@@ -544,8 +557,8 @@ describe("Revenue Extraction Agent", () => {
     const result = await runRevenueExtractionAgent(content, "mixed-use.txt");
 
     expect(result.revenueStreams.length).toBeGreaterThanOrEqual(2);
-    expect(result.revenueStreams.some(s => s.category === "Commercial")).toBe(true);
-    expect(result.revenueStreams.some(s => s.category === "Residential")).toBe(true);
+    expect(result.revenueStreams.some((s) => s.category === "Commercial")).toBe(true);
+    expect(result.revenueStreams.some((s) => s.category === "Residential")).toBe(true);
   });
 });
 ```

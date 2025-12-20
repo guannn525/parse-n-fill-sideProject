@@ -1,10 +1,10 @@
 # PARSE-N-FILL Progress Checklist
 
-**Purpose**: Track implementation of a modular financial document parsing feature that extracts revenue streams compatible with other_branch's income-approach module.
+**Purpose**: Track implementation of a modular financial document parsing feature that extracts revenue streams and outputs JSON.
 
-**Current State**: Phase 4 complete. Ready for Phase 5 (Export Layer).
+**Current State**: Phase 4 complete. Ready for Phase 5 (API Layer).
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-20
 
 ---
 
@@ -12,7 +12,7 @@
 
 ### 1.1 AI Configuration
 
-- [x] Create `src/ai/config.ts` - Gemini model configuration (Flash 2.0 default, Pro 2.0 for complex)
+- [x] Create `src/ai/config.ts` - Gemini model configuration (Gemini 3 Flash default, Gemini 3 Pro for complex)
 - [x] Define model selection logic based on document complexity
 - [x] Configure API client with proper error handling
 
@@ -115,94 +115,36 @@
 
 ---
 
-## Phase 5: Export Layer
+## Phase 5: API Layer
 
-### 5.1 Excel Export
-
-- [ ] Create `src/export/excel-export.ts`
-- [ ] Define workbook structure matching income-approach revenue format
-- [ ] Include unit-level breakdown (not just totals)
-- [ ] Add formatting (headers, totals, conditional formatting)
-- [ ] Add metadata sheet (timestamp, source file, agent reasoning)
-
-### 5.2 Export Tests
-
-- [ ] Create `src/export/excel-export.test.ts`
-- [ ] Verify workbook structure matches income-approach format
-- [ ] Test with various data volumes
-
----
-
-## Phase 6: API Layer
-
-### 6.1 Parse Document API
+### 5.1 Parse Document API
 
 - [ ] Implement `src/api/parse-document.ts` (currently stub)
-- [ ] Accept: file buffer/URL, options
+- [ ] Accept: file buffer/path, options
 - [ ] Return: `{ revenueStreams: RevenueStream[] }` + metadata
 - [ ] Add request validation with Zod schemas
 
-### 6.2 Export Excel API
-
-- [ ] Implement `src/api/export-excel.ts` (currently stub)
-- [ ] Accept: RevenueStream[]
-- [ ] Return: Excel buffer or file path
-- [ ] Support streaming for large files
-
-### 6.3 API Tests
+### 5.2 API Tests
 
 - [ ] Create `src/api/parse-document.test.ts`
-- [ ] Create `src/api/export-excel.test.ts`
-- [ ] Test end-to-end workflows
+- [ ] Test end-to-end parse → JSON workflow
 
 ---
 
-## Phase 7: Integration - other_branch
+## Phase 6: Quality & Documentation
 
-> **NOTE: FOR DOCUMENTATION ONLY**
->
-> other_branch is a separate production application. The tasks below document HOW to integrate PARSE-N-FILL into other_branch, but the actual integration work will be done in the other_branch repository, NOT here. Do NOT edit files in `/mnt/c/PARSE-N-FILL/other_branch/`.
-
-### 7.1 API Route (in other_branch repo)
-
-- [ ] Create `src/app/api/parse-document/route.ts` in other_branch
-- [ ] Use Clerk auth (`auth()` from `@clerk/nextjs/server`)
-- [ ] Accept file upload or session file reference
-
-### 7.2 Type Mapping (in other_branch repo)
-
-- [ ] Map PARSE-N-FILL RevenueStream[] -> other_branch RevenueStream[]
-- [ ] Ensure id, name, category, rows[], vacancyRate, totals compatibility
-- [ ] Handle RevenueRow field mapping (unit, squareFeet, monthlyRate, etc.)
-
-### 7.3 Session Integration (in other_branch repo)
-
-- [ ] Update session with parsed data via `/api/sessions/drafts/[id]`
-- [ ] Pre-populate income-approach revenue page from parsed results
-- [ ] Update Zustand store (SubModule.data.revenueStreams)
-
-### 7.4 Integration Tests (in other_branch repo)
-
-- [ ] Test with other_branch session workflow
-- [ ] Verify revenue calculations work with parsed data
-
----
-
-## Phase 8: Quality & Documentation
-
-### 8.1 Test Coverage
+### 6.1 Test Coverage
 
 - [ ] Achieve >80% test coverage
 - [ ] Add integration tests with real rent roll documents
 - [ ] Performance benchmarks
 
-### 8.2 Documentation
+### 6.2 Documentation
 
 - [ ] Update README.md with usage examples
-- [ ] Document integration pattern for other_branch
 - [ ] Add API reference documentation
 
-### 8.3 Error Handling
+### 6.3 Error Handling
 
 - [ ] Comprehensive error messages
 - [ ] Logging with context
@@ -212,29 +154,17 @@
 
 ## Key Files Reference
 
-### PARSE-N-FILL (Core Module)
-
 | File                                   | Status      | Purpose                                                  |
 | -------------------------------------- | ----------- | -------------------------------------------------------- |
 | `src/types/revenue-stream.ts`          | ✅ Complete | RevenueStream, RevenueRow interfaces                     |
 | `src/ai/tools/revenue-stream-types.ts` | ✅ Complete | Zod validation schemas                                   |
 | `src/api/parse-document.ts`            | Stub        | Main parse API                                           |
-| `src/api/export-excel.ts`              | Stub        | Excel export API                                         |
 | `src/parsers/*`                        | ✅ Complete | File parsers (PDF, Excel, CSV, Image)                    |
 | `src/ai/config.ts`                     | ✅ Complete | Gemini config                                            |
 | `src/ai/prompts/*`                     | ✅ Complete | System prompts (revenue extraction)                      |
 | `src/ai/tools/*`                       | ✅ Complete | AI tools (revenue extraction with inline categorization) |
 | `src/agent/*`                          | ✅ Complete | Revenue extraction agent (21 tests)                      |
-| `src/export/*`                         | Empty       | Excel generation                                         |
 | `src/lib/*`                            | ✅ Complete | Utilities (errors, constants, utils)                     |
-
-### other_branch Reference Files (READ-ONLY - Do NOT edit)
-
-| File                                                              | Purpose                                    |
-| ----------------------------------------------------------------- | ------------------------------------------ |
-| `src/stores/types.ts`                                             | Reference: RevenueStream, RevenueRow types |
-| `src/app/(app)/bov/_components/underwriting-tab/income-approach/` | Reference: Income-approach UI structure    |
-| `src/app/api/sessions/drafts/[id]/route.ts`                       | Reference: Session update pattern          |
 
 ---
 
@@ -291,9 +221,7 @@ interface RevenueRow {
 
 - [ ] Parse PDF rent rolls and extract unit-level revenue data
 - [ ] Parse Excel rent rolls and extract RevenueRow[] data
-- [ ] Output valid RevenueStream[] JSON compatible with other_branch
-- [ ] Generate formatted Excel export matching income-approach format
-- [ ] Integrate with other_branch income-approach revenue page
+- [ ] Output valid RevenueStream[] JSON
 - [ ] > 80% test coverage
 - [ ] Documentation complete
 
@@ -301,14 +229,10 @@ interface RevenueRow {
 
 ## Notes
 
-> **IMPORTANT: other_branch is a READ-ONLY reference project.**
-> Do NOT edit files in that directory. Study its patterns, but implement all code in PARSE-N-FILL only.
-
 - PARSE-N-FILL uses Gemini for rent roll parsing and revenue extraction
-- other_branch income-approach expects RevenueStream[] with unit-level RevenueRow[] data
-- Vercel AI SDK is used across both codebases - consistent patterns available
-- Zod validation is standard across both codebases
-- Phase 7 documents HOW to integrate, not tasks to do here
+- Output is RevenueStream[] with unit-level RevenueRow[] data
+- Vercel AI SDK used for AI integration
+- Zod validation for all schemas
 
 ---
 
@@ -320,4 +244,5 @@ interface RevenueRow {
 | 2024-12-14 | Phase 2 | ✅ Passed | Parser layer complete. 4 parsers (PDF, Excel, CSV, Image) with 45 passing tests. Used Claude vision for PDFs/images, ExcelJS/PapaParse for structured files. Fixed AI SDK v5 `maxOutputTokens` param and safe ArrayBuffer handling. |
 | 2025-12-17 | Docs    | Revised   | Pivoted from DirectCapitalizationRateModel to RevenueStream output. Removed MAP05 references. Focus now on other_branch income-approach integration.                                                                                |
 | 2025-12-19 | Phase 3 | ✅ Passed | AI tools layer complete. extractRevenueStreams tool with inline categorization, Zod schemas in revenue-stream-types.ts, TypeScript interfaces, and 17 tests all passing.                                                            |
-| 2025-12-19 | Phase 4 | ✅ Passed | Agent layer complete. revenue-extraction-agent.ts orchestrates parse→extract→JSON pipeline. 21 tests passing. CLI script (scripts/extract.ts) for manual testing. Migrated to Gemini 3 Flash Preview/Pro 2.0.                       |
+| 2025-12-19 | Phase 4 | ✅ Passed | Agent layer complete. revenue-extraction-agent.ts orchestrates parse→extract→JSON pipeline. 21 tests passing. CLI script (scripts/extract.ts) for manual testing. Migrated to Gemini 3 Flash Preview/Pro 3 Preview.                 |
+| 2025-12-20 | Scope   | Revised   | Simplified scope: parse → JSON output only. Removed Excel export (Phase 5) and other_branch integration (Phase 7). Focus on testing and finalizing core parse workflow.                                                             |

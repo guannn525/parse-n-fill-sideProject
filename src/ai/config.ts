@@ -12,7 +12,7 @@ import { google } from "@ai-sdk/google";
  */
 const MODEL_IDS = {
   FLASH: "gemini-3-flash-preview",
-  PRO: "gemini-2.0-pro-exp",
+  PRO: "gemini-3-pro-preview",
 } as const;
 
 /**

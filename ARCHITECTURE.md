@@ -4,7 +4,7 @@ Technical architecture documentation for PARSE-N-FILL.
 
 ## System Overview
 
-PARSE-N-FILL is a modular rent roll parsing system that uses Claude AI to extract structured revenue stream data from various document formats and output RevenueStream[] compatible with income-approach analysis.
+PARSE-N-FILL is a modular rent roll parsing system that uses Gemini AI to extract structured revenue stream data from various document formats and output RevenueStream[] compatible with income-approach analysis.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -13,7 +13,7 @@ PARSE-N-FILL is a modular rent roll parsing system that uses Claude AI to extrac
 │                                                                     │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────────┐ │
 │  │   Input     │    │   Parser    │    │      AI Agent           │ │
-│  │  Documents  │───▶│   Layer     │───▶│  (Claude Sonnet 4.5)    │ │
+│  │  Documents  │───▶│   Layer     │───▶│  (Gemini 3 Flash)       │ │
 │  │             │    │             │    │                         │ │
 │  │  • PDF      │    │  • Vision   │    │  • Extract revenue rows │ │
 │  │  • Excel    │    │  • ExcelJS  │    │  • Categorize streams   │ │
@@ -31,16 +31,6 @@ PARSE-N-FILL is a modular rent roll parsing system that uses Claude AI to extrac
 │                     └───────────────────────┬─────────────────────┘ │
 │                                             │                       │
 │                                             ▼                       │
-│                     ┌─────────────────────────────────────────────┐ │
-│                     │            Excel Export (ExcelJS)           │ │
-│                     │                                             │ │
-│                     │  Sheet 1: Summary                           │ │
-│                     │  Sheet 2: Residential Revenue               │ │
-│                     │  Sheet 3: Commercial Revenue                │ │
-│                     │  Sheet 4: Miscellaneous Revenue             │ │
-│                     │  Sheet 5: Calculations (with formulas)      │ │
-│                     └─────────────────────────────────────────────┘ │
-│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -54,20 +44,19 @@ parse-n-fill/
 │   ├── types/                      # TypeScript type definitions
 │   │   ├── index.ts                # Re-exports
 │   │   ├── revenue-stream.ts       # Core model interfaces
-│   │   ├── file-types.ts           # File/MIME type constants
-│   │   └── api-types.ts            # Request/response types
+│   │   └── direct-cap-model.ts     # Direct cap model types
 │   │
 │   ├── schemas/                    # Zod validation schemas
 │   │   ├── index.ts                # Re-exports
-│   │   ├── revenue-stream-schema.ts # Model validation
-│   │   └── request-schema.ts       # API request validation
+│   │   ├── direct-cap-schema.ts    # Direct cap model validation
+│   │   └── custom-model-schema.ts  # Custom financial model schemas
 │   │
 │   ├── parsers/                    # File parsing layer
 │   │   ├── index.ts                # Parser factory
-│   │   ├── pdf-parser.ts           # PDF via Claude vision
+│   │   ├── pdf-parser.ts           # PDF via Gemini vision
 │   │   ├── excel-parser.ts         # Excel via ExcelJS
 │   │   ├── csv-parser.ts           # CSV via PapaParse
-│   │   └── image-parser.ts         # Images via Claude vision
+│   │   └── image-parser.ts         # Images via Gemini vision
 │   │
 │   ├── ai/                         # AI integration layer
 │   │   ├── index.ts                # AI module exports
@@ -85,12 +74,6 @@ parse-n-fill/
 │   ├── agent/                      # Agent orchestration
 │   │   ├── index.ts
 │   │   └── revenue-extraction-agent.ts
-│   │
-│   ├── export/                     # Export functionality
-│   │   ├── index.ts
-│   │   ├── excel-export.ts         # ExcelJS workbook generation
-│   │   └── templates/
-│   │       └── revenue-template.ts
 │   │
 │   ├── api/                        # API handlers
 │   │   ├── index.ts
@@ -122,7 +105,7 @@ The parser layer handles document ingestion and text extraction.
 ```typescript
 // Parser Factory Pattern
 interface ParsedContent {
-  text: string;                        // Extracted text content
+  text: string; // Extracted text content
   structured?: Record<string, unknown>[]; // Tabular data if available
   metadata?: {
     pages?: number;
@@ -134,32 +117,33 @@ async function parseDocument(
   fileBuffer: Buffer,
   mimeType: string,
   fileName: string
-): Promise<ParsedContent>
+): Promise<ParsedContent>;
 ```
 
 **Parser Selection Logic:**
 
-| MIME Type | Parser | Method |
-|-----------|--------|--------|
-| `application/pdf` | pdf-parser | Claude vision (base64) |
-| `image/*` | image-parser | Claude vision (base64) |
-| `text/csv` | csv-parser | PapaParse |
-| `application/vnd.openxmlformats-*` | excel-parser | ExcelJS → PapaParse |
+| MIME Type                          | Parser       | Method                 |
+| ---------------------------------- | ------------ | ---------------------- |
+| `application/pdf`                  | pdf-parser   | Gemini vision (base64) |
+| `image/*`                          | image-parser | Gemini vision (base64) |
+| `text/csv`                         | csv-parser   | PapaParse              |
+| `application/vnd.openxmlformats-*` | excel-parser | ExcelJS → PapaParse    |
 
 ### 2. AI Layer (`src/ai/`)
 
 #### Configuration (`src/ai/config.ts`)
 
 ```typescript
-import { anthropic } from "@ai-sdk/anthropic";
+import { google } from "@ai-sdk/google";
 
 export const AI_CONFIG = {
-  modelId: "claude-sonnet-4-20250514",
+  defaultModel: "gemini-3-flash-preview",
+  complexModel: "gemini-3-pro-preview",
   maxSteps: 5,
-  temperature: 0,  // Deterministic for financial data
+  temperature: 0.3,
 } as const;
 
-export const aiModel = anthropic(AI_CONFIG.modelId);
+export const aiModel = google(AI_CONFIG.defaultModel);
 ```
 
 #### Tools (`src/ai/tools/`)
@@ -223,37 +207,6 @@ export async function runRevenueExtractionAgent(
 }
 ```
 
-### 4. Export Layer (`src/export/`)
-
-Excel workbook generation with formulas:
-
-```typescript
-import ExcelJS from "exceljs";
-
-export async function generateExcelWorkbook(
-  revenueStreams: RevenueStream[]
-): Promise<Buffer> {
-  const workbook = new ExcelJS.Workbook();
-
-  // Sheet 1: Summary
-  const summarySheet = workbook.addWorksheet("Summary");
-  addSummarySheet(summarySheet, revenueStreams);
-
-  // Sheet 2-4: Category sheets
-  for (const stream of revenueStreams) {
-    const sheet = workbook.addWorksheet(stream.name);
-    addRevenueStreamSheet(sheet, stream);
-  }
-
-  // Sheet 5: Calculations with Excel formulas
-  const calcSheet = workbook.addWorksheet("Calculations");
-  calcSheet.getCell("A1").value = "Total Gross Revenue";
-  calcSheet.getCell("B1").value = { formula: "SUM(Summary!B:B)" };
-
-  return workbook.xlsx.writeBuffer() as Promise<Buffer>;
-}
-```
-
 ## Type Definitions
 
 ### Core Types (`src/types/revenue-stream.ts`)
@@ -262,7 +215,7 @@ export async function generateExcelWorkbook(
 /**
  * Revenue Stream Category
  */
-export type RevenueStreamCategory = 'Residential' | 'Commercial' | 'Miscellaneous';
+export type RevenueStreamCategory = "Residential" | "Commercial" | "Miscellaneous";
 
 /**
  * Revenue Stream
@@ -341,13 +294,13 @@ export interface RevenueRow {
 }
 ```
 
-### API Types (`src/types/api-types.ts`)
+### API Types (Planned)
 
 ```typescript
 export interface ParseDocumentRequest {
   fileName: string;
   fileType: string;
-  fileData: string;  // base64
+  fileData: string; // base64
   options?: {
     includeRawText?: boolean;
   };
@@ -377,11 +330,14 @@ export interface ExportExcelRequest {
 
 ## API Contracts
 
-### POST `/api/parse`
+**Note:** The API contracts below represent the planned interface. Current implementation provides library functions, not HTTP endpoints.
+
+### POST `/api/parse` (Planned)
 
 Parse a rent roll document.
 
 **Request:**
+
 ```json
 {
   "fileName": "rent-roll.pdf",
@@ -394,6 +350,7 @@ Parse a rent roll document.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -433,22 +390,9 @@ Parse a rent roll document.
 }
 ```
 
-### POST `/api/export`
+### POST `/api/export` (Not Implemented)
 
-Export revenue streams to Excel.
-
-**Request:**
-```json
-{
-  "revenueStreams": [ ... ],
-  "options": {
-    "templateName": "standard",
-    "includeMetadata": true
-  }
-}
-```
-
-**Response:** Binary Excel file (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)
+Excel export functionality is planned but not yet implemented.
 
 ## Integration Pattern
 

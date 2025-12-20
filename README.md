@@ -10,7 +10,6 @@ PARSE-N-FILL is a standalone API module designed to:
 2. **Extract** unit-level revenue data using Gemini AI vision and reasoning
 3. **Categorize** revenue into Residential, Commercial, and Miscellaneous streams
 4. **Output** structured RevenueStream[] JSON compatible with income-approach workflows
-5. **Export** to Excel with unit-level breakdown and totals
 
 ## RevenueStream Model
 
@@ -148,7 +147,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
 ### Usage
 
 ```typescript
-import { parseDocument, exportToExcel } from "parse-n-fill";
+import { parseDocument } from "parse-n-fill";
 
 // Parse a rent roll document
 const result = await parseDocument({
@@ -162,16 +161,13 @@ console.log(result.revenueStreams);
 
 console.log(result.metadata);
 // { sourceFileName, processingTimeMs, confidence, agentReasoning }
-
-// Export to Excel
-const excelBuffer = await exportToExcel(result.revenueStreams);
 ```
 
 ## Tech Stack
 
 | Component    | Technology                     | Purpose                      |
 | ------------ | ------------------------------ | ---------------------------- |
-| AI Model     | Gemini Flash 2.0               | Document parsing & reasoning |
+| AI Model     | Gemini 3 Flash (Preview)       | Document parsing & reasoning |
 | AI SDK       | Vercel AI SDK + @ai-sdk/google | API integration              |
 | File Parsing | ExcelJS, PapaParse             | Excel/CSV processing         |
 | Validation   | Zod                            | Schema validation            |
@@ -185,7 +181,7 @@ const excelBuffer = await exportToExcel(result.revenueStreams);
 | PDF    | .pdf              | Gemini vision (base64) |
 | Excel  | .xlsx, .xls       | ExcelJS + PapaParse    |
 | CSV    | .csv              | PapaParse              |
-| Images | .png, .jpg, .webp | Gemini vision (OCR)    |
+| Images | .png, .jpg, .webp | Gemini vision (base64) |
 
 ## API Reference
 
@@ -215,18 +211,9 @@ interface ParseResult {
 }
 ```
 
-### `exportToExcel(revenueStreams, options?)`
+### `exportToExcel(revenueStreams, options?)` (Not Implemented)
 
-Generate an Excel workbook from revenue streams.
-
-```typescript
-interface ExportOptions {
-  templateName?: "standard" | "detailed";
-  includeMetadata?: boolean;
-}
-
-// Returns: Buffer (xlsx file)
-```
+Excel export functionality is planned but not yet implemented.
 
 ## Compatibility
 
@@ -247,10 +234,9 @@ parse-n-fill/
 │   ├── ai/
 │   │   ├── config.ts   # Gemini model config
 │   │   ├── prompts/    # System prompts for revenue extraction
-│   │   └── tools/      # AI agent tools (extract, categorize)
+│   │   └── tools/      # AI agent tools (extractRevenueStreams)
 │   ├── agent/          # Revenue extraction agent
-│   ├── export/         # Excel export utilities
-│   ├── api/            # API handlers
+│   ├── api/            # API handlers (parse-document)
 │   └── lib/            # Shared utilities
 ├── package.json
 ├── tsconfig.json
@@ -291,7 +277,7 @@ Output is saved to `output/<filename>.json`
 
 ## Cost Estimation
 
-Using Gemini Flash 2.0:
+Using Gemini 3 Flash (Preview):
 
 | Volume      | Cost/Month | Per Document |
 | ----------- | ---------- | ------------ |
@@ -299,7 +285,7 @@ Using Gemini Flash 2.0:
 | 1,000 docs  | ~$1.50     | $0.0015      |
 | 10,000 docs | ~$15.00    | $0.0015      |
 
-_Estimates based on 5-page rent roll documents with mixed text/images. Gemini Flash 2.0 offers significantly lower costs compared to Claude._
+_Estimates based on 5-page rent roll documents with mixed text/images. Gemini 3 Flash offers significantly lower costs compared to Claude. Actual costs may vary based on Gemini 3 pricing._
 
 ## License
 
