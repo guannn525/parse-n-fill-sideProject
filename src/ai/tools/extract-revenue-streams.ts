@@ -2,7 +2,7 @@
  * Tool: extractRevenueStreams
  *
  * Extracts rent roll data into RevenueStream[] format for other_branch integration.
- * Uses Claude AI for intelligent extraction and categorization.
+ * Uses Gemini AI for intelligent extraction and categorization.
  *
  * Workflow:
  * 1. Parser outputs ParsedContent

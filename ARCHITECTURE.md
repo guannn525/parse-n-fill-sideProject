@@ -43,47 +43,38 @@ parse-n-fill/
 │   │
 │   ├── types/                      # TypeScript type definitions
 │   │   ├── index.ts                # Re-exports
-│   │   ├── revenue-stream.ts       # Core model interfaces
-│   │   └── direct-cap-model.ts     # Direct cap model types
-│   │
-│   ├── schemas/                    # Zod validation schemas
-│   │   ├── index.ts                # Re-exports
-│   │   ├── direct-cap-schema.ts    # Direct cap model validation
-│   │   └── custom-model-schema.ts  # Custom financial model schemas
+│   │   └── revenue-stream.ts       # Core model interfaces
 │   │
 │   ├── parsers/                    # File parsing layer
 │   │   ├── index.ts                # Parser factory
+│   │   ├── types.ts                # Parser type definitions
 │   │   ├── pdf-parser.ts           # PDF via Gemini vision
 │   │   ├── excel-parser.ts         # Excel via ExcelJS
 │   │   ├── csv-parser.ts           # CSV via PapaParse
 │   │   └── image-parser.ts         # Images via Gemini vision
 │   │
 │   ├── ai/                         # AI integration layer
-│   │   ├── index.ts                # AI module exports
 │   │   ├── config.ts               # Model configuration
 │   │   ├── prompts/                # System prompts
 │   │   │   ├── index.ts
-│   │   │   ├── extraction-prompt.ts
-│   │   │   └── categorization-prompt.ts
+│   │   │   └── revenue-stream-prompt.ts
 │   │   └── tools/                  # AI agent tools
 │   │       ├── index.ts
-│   │       ├── extract-revenue-streams.ts
-│   │       ├── categorize-revenue-streams.ts
-│   │       └── validate-extraction.ts
+│   │       ├── extract-revenue-streams.ts  # Extraction + categorization
+│   │       └── revenue-stream-types.ts     # Zod schemas
 │   │
 │   ├── agent/                      # Agent orchestration
 │   │   ├── index.ts
 │   │   └── revenue-extraction-agent.ts
 │   │
-│   ├── api/                        # API handlers
-│   │   ├── index.ts
-│   │   ├── parse-document.ts       # Main parsing endpoint
-│   │   └── export-excel.ts         # Excel export endpoint
-│   │
 │   └── lib/                        # Shared utilities
+│       ├── index.ts                # Re-exports
 │       ├── errors.ts               # Custom error classes
 │       ├── constants.ts            # Shared constants
 │       └── utils.ts                # Utility functions
+│
+├── scripts/                        # CLI utilities
+│   └── extract.ts                  # CLI extraction script
 │
 ├── package.json
 ├── tsconfig.json
@@ -136,74 +127,106 @@ async function parseDocument(
 ```typescript
 import { google } from "@ai-sdk/google";
 
+const MODEL_IDS = {
+  FLASH: "gemini-3-flash-preview",
+  PRO: "gemini-3-pro-preview",
+} as const;
+
 export const AI_CONFIG = {
-  defaultModel: "gemini-3-flash-preview",
-  complexModel: "gemini-3-pro-preview",
   maxSteps: 5,
   temperature: 0.3,
+  defaultModel: MODEL_IDS.FLASH,
+  complexModel: MODEL_IDS.PRO,
 } as const;
 
 export const aiModel = google(AI_CONFIG.defaultModel);
+
+export function getModel(complexity: "standard" | "complex") {
+  const modelId = complexity === "complex" ? AI_CONFIG.complexModel : AI_CONFIG.defaultModel;
+  return google(modelId);
+}
 ```
 
 #### Tools (`src/ai/tools/`)
 
-Tools follow the Vercel AI SDK pattern:
+The extraction tool uses `generateObject` with Zod schemas for structured output:
 
 ```typescript
-import { tool } from "ai";
-import { z } from "zod";
+import { tool, generateObject } from "ai";
+import { getModel, AI_CONFIG } from "../config";
+import {
+  extractRevenueStreamsInputSchema,
+  extractRevenueStreamsOutputSchema,
+} from "./revenue-stream-types";
 
-export const extractRevenueStreamsTool = tool({
-  description: `Extract revenue data from rent roll content.
+export const extractRevenueStreams = tool({
+  description: `Extract revenue data from rent roll documents into RevenueStream[] format.
+  Returns categorized streams (Residential/Commercial/Miscellaneous) with unit-level data.`,
 
-  Identifies:
-  - Unit identifiers (Apt 1A, Suite 200, etc.)
-  - Square footage per unit
-  - Monthly rates and annual income
-  - Vacancy status and tenant names`,
+  inputSchema: extractRevenueStreamsInputSchema,
 
-  inputSchema: z.object({
-    content: z.string().describe("Parsed document content"),
-    category: z.enum(["Residential", "Commercial", "Miscellaneous", "all"]).default("all"),
-  }),
-
-  execute: async ({ content, category }) => {
-    // Extract revenue rows from content
-    return {
-      success: true,
-      rows: [...],
-      confidence: 0.85,
-    };
+  execute: async (input) => {
+    const { object } = await generateObject({
+      model: getModel(input.rawText.length > 10000 ? "complex" : "standard"),
+      schema: extractRevenueStreamsOutputSchema,
+      system: getRevenueStreamSystemPrompt(),
+      prompt: buildRevenueStreamPrompt(input.rawText, input.fileName),
+      temperature: AI_CONFIG.temperature,
+    });
+    return object;
   },
 });
 ```
 
 ### 3. Agent Layer (`src/agent/`)
 
-The revenue extraction agent orchestrates the parsing workflow.
+The revenue extraction agent orchestrates the parsing workflow using a single extraction tool.
 
 ```typescript
-import { generateText } from "ai";
-import { aiModel, AI_CONFIG } from "../ai/config";
-import { extractRevenueStreamsTool, categorizeRevenueStreamsTool } from "../ai/tools";
+import { executeRevenueStreamExtraction } from "../ai/tools";
+import { parseFile } from "../parsers";
+import type { RevenueStream, RevenueStreamExtractionResult } from "../types";
 
-export async function runRevenueExtractionAgent(
-  parsedContent: string,
-  fileName: string
-): Promise<ParseResult> {
-  const result = await generateText({
-    model: aiModel,
-    maxSteps: AI_CONFIG.maxSteps,
-    tools: {
-      extractRevenueStreams: extractRevenueStreamsTool,
-      categorizeRevenueStreams: categorizeRevenueStreamsTool,
-    },
-    system: getExtractionSystemPrompt(),
-    prompt: buildExtractionPrompt(parsedContent, fileName),
+export interface ExtractionResult {
+  success: boolean;
+  revenueStreams: RevenueStream[];
+  metadata: {
+    sourceFileName: string;
+    processingTimeMs: number;
+    confidence: number;
+    reasoning: string;
+  };
+  error?: string;
+}
+
+export async function extractRevenueFromDocument(
+  fileBuffer: Buffer,
+  fileName: string,
+  mimeType: string
+): Promise<ExtractionResult> {
+  const startTime = Date.now();
+
+  // Parse file to get text content
+  const parsed = await parseFile({ buffer: fileBuffer, fileName, mimeType });
+
+  // Extract revenue streams using AI
+  const result = await executeRevenueStreamExtraction({
+    rawText: parsed.rawText,
+    structuredData: parsed.structuredData,
+    fileName,
   });
 
-  return extractResultFromResponse(result);
+  return {
+    success: result.success,
+    revenueStreams: result.revenueStreams,
+    metadata: {
+      sourceFileName: fileName,
+      processingTimeMs: Date.now() - startTime,
+      confidence: result.overallConfidence,
+      reasoning: result.reasoning,
+    },
+    error: result.error,
+  };
 }
 ```
 
@@ -218,79 +241,60 @@ export async function runRevenueExtractionAgent(
 export type RevenueStreamCategory = "Residential" | "Commercial" | "Miscellaneous";
 
 /**
- * Revenue Stream
- * A categorized collection of revenue rows
- */
-export interface RevenueStream {
-  /** Unique identifier */
-  id: string;
-
-  /** User-defined name: "Office Rents", "Parking", etc. */
-  name: string;
-
-  /** Category for grouping */
-  category: RevenueStreamCategory;
-
-  /** Optional description */
-  notes?: string;
-
-  /** Display order */
-  order: number;
-
-  /** Individual revenue items */
-  rows: RevenueRow[];
-
-  /** Section-level vacancy rate (0-100) */
-  vacancyRate?: number;
-
-  /** Calculated totals */
-  totals?: {
-    grossRevenue: number;
-    effectiveRevenue: number;
-    squareFootage: number;
-  };
-}
-
-/**
  * Revenue Row
  * Individual unit/lease data within a stream
  */
 export interface RevenueRow {
-  /** Unique identifier */
+  /** Unique row identifier */
   id: string;
 
-  /** Unit identifier: "Apt 1A", "Suite 200" */
+  /** Unit identifier (Apt 1A, Suite 200) */
   unit: string;
 
-  /** Square footage */
+  /** Unit square footage */
   squareFeet: number | null;
 
-  /** Monthly rent rate */
+  /** Monthly rent amount (extracted if in document) */
   monthlyRate: number | null;
 
-  /** Annual income (monthlyRate * 12) */
+  /** Annual income (extracted if in document) */
   annualIncome: number | null;
-
-  /** Effective annual income after vacancy */
-  effectiveAnnualIncome: number | null;
 
   /** Whether unit is vacant */
   isVacant: boolean;
+}
 
-  /** Combined vacancy/credit loss % (0-100) */
-  operatingVacancyAndCreditLoss: number;
+/**
+ * Revenue Stream
+ * A categorized collection of revenue rows
+ */
+export interface RevenueStream {
+  /** Unique stream identifier */
+  id: string;
 
-  /** Tenant name if occupied */
-  tenantName?: string;
+  /** Stream name (Office Rents, Parking, etc.) */
+  name: string;
 
-  /** Market rent for comparison */
-  marketRent?: number | null;
+  /** Category: Residential, Commercial, or Miscellaneous */
+  category: RevenueStreamCategory;
 
-  /** Variance from market rent */
-  rentVariance?: number | null;
+  /** Display order (1-based) */
+  order: number;
 
-  /** Lease expiration date (ISO string) */
-  leaseExpiry?: string;
+  /** Individual unit/revenue rows */
+  rows: RevenueRow[];
+}
+
+/**
+ * Extraction result for revenue streams
+ */
+export interface RevenueStreamExtractionResult {
+  success: boolean;
+  revenueStreams: RevenueStream[];
+  overallConfidence: number;
+  reasoning: string;
+  warnings?: string[];
+  error?: string;
 }
 ```
 
@@ -423,32 +427,68 @@ export async function POST(request: Request) {
 ### Custom Error Classes (`src/lib/errors.ts`)
 
 ```typescript
-export class ParseNFillError extends Error {
+/**
+ * Error thrown during document parsing operations
+ */
+export class ParseError extends Error {
   constructor(
     message: string,
-    public code: string,
-    public details?: Record<string, unknown>
+    public context?: Record<string, unknown>
   ) {
     super(message);
-    this.name = "ParseNFillError";
+    this.name = "ParseError";
   }
 }
 
-export class ParsingError extends ParseNFillError {
-  constructor(message: string, details?: Record<string, unknown>) {
-    super(message, "PARSING_ERROR", details);
+/**
+ * Error thrown when validation fails (e.g., Zod schema validation)
+ */
+export class ValidationError extends Error {
+  constructor(
+    message: string,
+    public context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "ValidationError";
   }
 }
 
-export class ExtractionError extends ParseNFillError {
-  constructor(message: string, details?: Record<string, unknown>) {
-    super(message, "EXTRACTION_ERROR", details);
+/**
+ * Error thrown when AI/LLM operations fail
+ */
+export class AIError extends Error {
+  constructor(
+    message: string,
+    public context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "AIError";
   }
 }
 
-export class ExportError extends ParseNFillError {
-  constructor(message: string, details?: Record<string, unknown>) {
-    super(message, "EXPORT_ERROR", details);
+/**
+ * Error thrown when financial data extraction fails
+ */
+export class ExtractionError extends Error {
+  constructor(
+    message: string,
+    public context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "ExtractionError";
+  }
+}
+
+/**
+ * Error thrown when Excel export operations fail
+ */
+export class ExportError extends Error {
+  constructor(
+    message: string,
+    public context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "ExportError";
   }
 }
 ```
@@ -458,12 +498,10 @@ export class ExportError extends ParseNFillError {
 ```json
 {
   "success": false,
-  "error": "Failed to parse document",
-  "code": "PARSING_ERROR",
-  "details": {
-    "fileType": "application/pdf",
-    "reason": "Document appears to be encrypted"
-  }
+  "revenueStreams": [],
+  "overallConfidence": 0,
+  "reasoning": "",
+  "error": "Revenue stream extraction failed: Document appears to be encrypted"
 }
 ```
 
@@ -488,13 +526,13 @@ interface CacheEntry {
 
 ### Rate Limiting
 
-- Claude API: Implement request queuing for high volume
-- Consider Batch API for non-urgent processing (50% cost savings)
+- Gemini API: Implement request queuing for high volume
+- Consider complexity-based model selection (Flash for simple, Pro for complex)
 
 ## Security Considerations
 
 1. **Input Validation**: All inputs validated via Zod schemas
-2. **File Size Limits**: 32MB max for PDFs (Claude limit)
+2. **File Size Limits**: 32MB max for documents
 3. **MIME Type Validation**: Whitelist-based validation
 4. **API Key Protection**: Environment variables, never exposed
 5. **No Eval**: All parsing uses safe methods (no `eval()`)
@@ -540,5 +578,5 @@ describe("Revenue Extraction Agent", () => {
 1. **Batch Processing**: Support for multiple documents in single request
 2. **Template System**: Custom extraction templates for different rent roll formats
 3. **Webhook Support**: Async processing with completion notifications
-4. **Multi-Model**: Fallback to alternative models (GPT-4V, Gemini)
+4. **Multi-Model**: Fallback to alternative models (GPT-4V, Claude)
 5. **Self-Hosted**: Option to run with local models for data sensitivity

@@ -5,7 +5,7 @@ allowed-tools: Read, Grep, Glob, Bash
 last-updated: 2025-12-20
 last-audit: 2025-12-20
 audit-interval-days: 90
-version: 1.0.0
+version: 1.1.0
 category: quality
 tags: cleanup, maintenance, dead-code, debug, temporary-files
 outputs: Cleanup report with actionable items
@@ -46,6 +46,7 @@ Systematically identify and remove temporary files, debug code, and clutter to m
 - [ ] Run Category F detection (TODO comments)
 - [ ] Run Category G detection (log files)
 - [ ] Run Category H detection (unused exports)
+- [ ] Run Category S detection (cascading barrel dead code)
 - [ ] Generated comprehensive scan report with counts
 - [ ] Shown full report to user BEFORE deleting anything
 - [ ] Got explicit user approval for deletions
@@ -54,16 +55,17 @@ Systematically identify and remove temporary files, debug code, and clutter to m
 
 **CRITICAL**: ALWAYS run a comprehensive auto-scan BEFORE asking the user what to cleanup.
 
-| Category | Risk/Impact | Description          |
-| -------- | ----------- | -------------------- |
-| A        | MEDIUM/LOW  | Temporary test files |
-| B        | MEDIUM/LOW  | Debug statements     |
-| C        | HIGH/LOW    | Commented code       |
-| D        | HIGH/HIGH   | Orphaned files       |
-| E        | LOW/LOW     | Backup files         |
-| F        | HIGH/LOW    | TODO comments        |
-| G        | LOW/LOW     | Log files            |
-| H        | MEDIUM/LOW  | Unused exports       |
+| Category | Risk/Impact | Description                |
+| -------- | ----------- | -------------------------- |
+| A        | MEDIUM/LOW  | Temporary test files       |
+| B        | MEDIUM/LOW  | Debug statements           |
+| C        | HIGH/LOW    | Commented code             |
+| D        | HIGH/HIGH   | Orphaned files             |
+| E        | LOW/LOW     | Backup files               |
+| F        | HIGH/LOW    | TODO comments              |
+| G        | LOW/LOW     | Log files                  |
+| H        | MEDIUM/LOW  | Unused exports             |
+| S        | HIGH/HIGH   | Cascading barrel dead code |
 
 **Quick Scan**:
 
@@ -88,6 +90,7 @@ Cleanup Scan Summary:
 - Backup files: [count]
 - TODO comments: [count]
 - Log files: [count]
+- Barrel dead code: [count]
 ```
 
 **Then ask user what to cleanup**:
@@ -221,6 +224,104 @@ chmod +x /tmp/find_unused_exports.sh
 /tmp/find_unused_exports.sh
 ```
 
+#### Category S: Cascading Barrel Dead Code [RISK: HIGH] [IMPACT: HIGH]
+
+**Problem**: Files can be exported through barrel files (index.ts) and re-exported through cascading barrels (e.g., src/ai/tools/index.ts → src/index.ts), making them appear "used" when their exported symbols are never actually imported by application code.
+
+**Detection Strategy**:
+
+1. Find files that are ONLY imported by index.ts files (barrel exports)
+2. Extract all exported symbols from those files
+3. Check if ANY of those symbols are imported anywhere in actual application code
+4. Flag files where 0 symbols are used as DEAD CODE
+
+```bash
+cat > /tmp/find_barrel_dead_code.sh << 'EOFSCRIPT'
+#!/bin/bash
+
+# Find all non-index, non-test TypeScript files in src/
+find src -type f -name "*.ts" ! -name "index.ts" ! -name "*.test.ts" | while read file; do
+  basename=$(basename "$file")
+  filename="${basename%.*}"
+
+  # Find all files that import this file
+  importers=$(grep -l "from ['\"].*$filename" src/ --include="*.ts" 2>/dev/null | grep -v "^$file$")
+
+  # Check if file is ONLY imported by index.ts files
+  non_barrel_importers=$(echo "$importers" | grep -v "index.ts" | grep -c ".")
+  barrel_importers=$(echo "$importers" | grep -c "index.ts")
+
+  # If file is only imported by barrels (or not imported at all)
+  if [ "$non_barrel_importers" -eq 0 ] && [ "$barrel_importers" -gt 0 ]; then
+    # Extract all exported symbols from the file
+    exports=$(grep -E "^export (const|function|interface|type|class|enum)" "$file" | \
+      sed -E 's/export (const|function|interface|type|class|enum) ([a-zA-Z_][a-zA-Z0-9_]*).*/\2/')
+
+    # Count how many of these symbols are actually used in app code
+    used_count=0
+    total_count=0
+    unused_symbols=""
+
+    for symbol in $exports; do
+      total_count=$((total_count + 1))
+
+      # Check if symbol is imported anywhere (excluding barrels, the file itself, and tests)
+      uses=$(grep -r "import.*$symbol" src/ --include="*.ts" 2>/dev/null | \
+        grep -v "index.ts" | \
+        grep -v "^$file:" | \
+        grep -v ".test.ts:" | \
+        wc -l)
+
+      if [ "$uses" -eq 0 ]; then
+        case "$unused_symbols" in
+          "") unused_symbols="$symbol" ;;
+          *) unused_symbols="$unused_symbols, $symbol" ;;
+        esac
+      else
+        used_count=$((used_count + 1))
+      fi
+    done
+
+    # If NO symbols are used, this is dead code hidden behind barrels
+    if [ "$total_count" -gt 0 ] && [ "$used_count" -eq 0 ]; then
+      echo "DEAD CODE (barrel only): $file"
+      echo "  Exported symbols (unused): $unused_symbols"
+      echo "  Only re-exported through: $(echo "$importers" | grep "index.ts" | tr '\n' ' ')"
+      echo ""
+    elif [ "$used_count" -lt "$total_count" ]; then
+      # Some symbols used, some not
+      echo "PARTIALLY DEAD: $file"
+      echo "  Used: $used_count/$total_count symbols"
+      echo "  Unused symbols: $unused_symbols"
+      echo ""
+    fi
+  fi
+done
+EOFSCRIPT
+
+chmod +x /tmp/find_barrel_dead_code.sh
+/tmp/find_barrel_dead_code.sh
+```
+
+**What This Detects**:
+
+- Legacy/prototype files exported from `src/ai/tools/index.ts` but never used
+- Old implementations re-exported through cascading barrels
+- Files that "look" imported because of barrel exports but have zero actual usage
+
+**Example**:
+
+```
+src/ai/tools/old-tool.ts
+  ↓ exported from
+src/ai/tools/index.ts
+  ↓ re-exported from
+src/index.ts
+  ↓ but...
+NO APPLICATION CODE IMPORTS ANY SYMBOLS FROM old-tool.ts
+  = DEAD CODE
+```
+
 ### Step 3: Categorize and Prioritize
 
 Group findings by safety level:
@@ -244,6 +345,7 @@ Group findings by safety level:
 - Orphaned files (could be entry points)
 - TODO comments (need context)
 - Files in src/ without imports (might be standalone)
+- Barrel dead code (verify symbols truly unused)
 
 ### Step 4: Generate Cleanup Report
 
@@ -259,6 +361,7 @@ Group findings by safety level:
 - Backup files: [count] found
 - TODO comments: [count] found
 - Log files: [count] found ([size]MB)
+- Barrel dead code: [count] found
 
 ---
 
@@ -267,6 +370,13 @@ Group findings by safety level:
 1. **src/ai/tools/old-tool.ts** (126 lines)
    - Status: No imports found
    - Last modified: 2 weeks ago
+   - Safe to delete: YES
+
+2. **src/ai/tools/legacy-parser.ts** (89 lines)
+   - Status: BARREL DEAD CODE
+   - Exported symbols: extractLegacyData, LegacyFormat
+   - Only re-exported through: src/ai/tools/index.ts src/index.ts
+   - Actual usage: 0 symbols used in application code
    - Safe to delete: YES
 
 ---
@@ -336,6 +446,16 @@ git diff file.ts
 rm file.ts.backup
 ```
 
+**Remove barrel dead code**:
+
+```bash
+# 1. Remove the file
+rm src/ai/tools/legacy-parser.ts
+
+# 2. Remove from barrel export
+# Edit src/ai/tools/index.ts to remove export line
+```
+
 ### Step 8: Verify Cleanup Results
 
 ```bash
@@ -370,6 +490,7 @@ If any errors:
 - 8 console.log statements
 - 2 debugger statements
 - 1 orphaned test helper
+- 2 barrel dead code files (215 lines total)
 
 ### Disk Space Freed
 
@@ -459,6 +580,15 @@ npm run typecheck && npm test && npm run build
 - Commented "before" code
 - Orphaned utility functions
 - Unused imports
+- Barrel dead code from old architecture
+
+### Scenario 4: Barrel Export Cleanup
+
+**Cleanup**:
+
+- Prototype files that were exported but never used
+- Legacy implementations hidden behind re-exports
+- Old tools/utilities still in barrel but unused
 
 ## References
 
@@ -477,6 +607,7 @@ npm run typecheck && npm test && npm run build
 - [ ] Ran Category F detection (TODOs)
 - [ ] Ran Category G detection (log files)
 - [ ] Ran Category H detection (unused exports)
+- [ ] Ran Category S detection (cascading barrel dead code)
 - [ ] Generated comprehensive cleanup report with all counts
 - [ ] Shown full report to user BEFORE deleting
 

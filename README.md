@@ -20,15 +20,8 @@ interface RevenueStream {
   id: string;
   name: string; // "Office Rents", "Parking", etc.
   category: "Residential" | "Commercial" | "Miscellaneous";
-  notes?: string;
   order: number;
   rows: RevenueRow[];
-  vacancyRate?: number; // 0-100
-  totals?: {
-    grossRevenue: number;
-    effectiveRevenue: number;
-    squareFootage: number;
-  };
 }
 
 interface RevenueRow {
@@ -36,21 +29,18 @@ interface RevenueRow {
   unit: string; // "Apt 1A", "Suite 200"
   squareFeet: number | null;
   monthlyRate: number | null;
-  annualIncome: number | null; // monthlyRate * 12
-  effectiveAnnualIncome: number | null;
+  annualIncome: number | null;
   isVacant: boolean;
-  operatingVacancyAndCreditLoss: number;
-  tenantName?: string;
-  marketRent?: number | null;
-  rentVariance?: number | null;
-  leaseExpiry?: string;
 }
 ```
+
+**Note:** Additional fields (vacancyRate, totals, tenantName, etc.) can be calculated by the consuming UI based on these base fields.
 
 ### Example Output
 
 ```json
 {
+  "success": true,
   "revenueStreams": [
     {
       "id": "stream-1",
@@ -59,35 +49,22 @@ interface RevenueRow {
       "order": 1,
       "rows": [
         {
-          "id": "row-1",
+          "id": "stream-1-row-1",
           "unit": "Apt 1A",
           "squareFeet": 850,
           "monthlyRate": 1500,
           "annualIncome": 18000,
-          "effectiveAnnualIncome": 17100,
-          "isVacant": false,
-          "operatingVacancyAndCreditLoss": 5,
-          "tenantName": "John Smith",
-          "leaseExpiry": "2025-06-30"
+          "isVacant": false
         },
         {
-          "id": "row-2",
+          "id": "stream-1-row-2",
           "unit": "Apt 1B",
           "squareFeet": 900,
           "monthlyRate": 1600,
           "annualIncome": 19200,
-          "effectiveAnnualIncome": 18240,
-          "isVacant": false,
-          "operatingVacancyAndCreditLoss": 5,
-          "tenantName": "Jane Doe"
+          "isVacant": false
         }
-      ],
-      "vacancyRate": 5,
-      "totals": {
-        "grossRevenue": 37200,
-        "effectiveRevenue": 35340,
-        "squareFootage": 1750
-      }
+      ]
     },
     {
       "id": "stream-2",
@@ -96,29 +73,18 @@ interface RevenueRow {
       "order": 2,
       "rows": [
         {
-          "id": "row-3",
+          "id": "stream-2-row-1",
           "unit": "Lot A",
           "squareFeet": null,
           "monthlyRate": 100,
           "annualIncome": 1200,
-          "effectiveAnnualIncome": 1200,
-          "isVacant": false,
-          "operatingVacancyAndCreditLoss": 0
+          "isVacant": false
         }
-      ],
-      "totals": {
-        "grossRevenue": 1200,
-        "effectiveRevenue": 1200,
-        "squareFootage": 0
-      }
+      ]
     }
   ],
-  "metadata": {
-    "sourceFileName": "rent-roll.pdf",
-    "processingTimeMs": 2340,
-    "confidence": 0.92,
-    "agentReasoning": "Extracted 2 units from residential rent roll. Identified parking as miscellaneous income based on non-unit naming."
-  }
+  "overallConfidence": 0.92,
+  "reasoning": "Extracted 3 units from rent roll. Identified 2 residential apartments and 1 parking space as miscellaneous income."
 }
 ```
 
@@ -229,15 +195,14 @@ The output RevenueStream[] format is compatible with other_branch's `SubModule.d
 parse-n-fill/
 ├── src/
 │   ├── types/          # TypeScript interfaces (RevenueStream, RevenueRow)
-│   ├── schemas/        # Zod validation schemas
 │   ├── parsers/        # File parsing utilities (PDF, Excel, CSV, Image)
 │   ├── ai/
 │   │   ├── config.ts   # Gemini model config
 │   │   ├── prompts/    # System prompts for revenue extraction
-│   │   └── tools/      # AI agent tools (extractRevenueStreams)
+│   │   └── tools/      # AI agent tools + Zod schemas
 │   ├── agent/          # Revenue extraction agent
-│   ├── api/            # API handlers (parse-document)
-│   └── lib/            # Shared utilities
+│   └── lib/            # Shared utilities (errors, constants)
+├── scripts/            # CLI utilities
 ├── package.json
 ├── tsconfig.json
 └── vitest.config.ts

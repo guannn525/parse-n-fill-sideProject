@@ -32,35 +32,37 @@ execute: async ({ content }) => {
 
 ### Revenue Extraction Agent
 
-The main agent orchestrates rent roll parsing through multi-step reasoning.
+The main agent orchestrates rent roll parsing using `generateObject` for structured output.
 
 ```typescript
-import { generateText } from "ai";
-import { aiModel, AI_CONFIG } from "../ai/config";
+import { executeRevenueStreamExtraction } from "../ai/tools";
+import { parseFile } from "../parsers";
 
-export async function runRevenueExtractionAgent(
-  parsedContent: string,
-  fileName: string
-): Promise<ParseResult> {
+export async function extractRevenueFromDocument(
+  fileBuffer: Buffer,
+  fileName: string,
+  mimeType: string
+): Promise<ExtractionResult> {
   const startTime = Date.now();
 
-  const result = await generateText({
-    model: aiModel,
-    maxSteps: AI_CONFIG.maxSteps,
-    tools: {
-      extractRevenueStreams: extractRevenueStreamsTool,
-    },
-    system: getExtractionSystemPrompt(),
-    prompt: buildExtractionPrompt(parsedContent, fileName),
+  // Parse file to get text content
+  const parsed = await parseFile({ buffer: fileBuffer, fileName, mimeType });
+
+  // Extract revenue streams using AI
+  const result = await executeRevenueStreamExtraction({
+    rawText: parsed.rawText,
+    structuredData: parsed.structuredData,
+    fileName,
   });
 
   return {
-    revenueStreams: extractStreamsFromResult(result),
+    success: result.success,
+    revenueStreams: result.revenueStreams,
     metadata: {
       sourceFileName: fileName,
       processingTimeMs: Date.now() - startTime,
-      confidence: calculateConfidence(result),
-      agentReasoning: extractReasoning(result),
+      confidence: result.overallConfidence,
+      reasoning: result.reasoning,
     },
   };
 }
@@ -69,23 +71,25 @@ export async function runRevenueExtractionAgent(
 ### Orchestration Flow
 
 ```
-Step 1: extractRevenueStreams
+Step 1: parseFile (PDF/Excel/CSV/Image)
+   ↓
+   Returns ParsedContent with rawText and structuredData
+   ↓
+Step 2: executeRevenueStreamExtraction
    ↓
    AI extracts unit data AND categorizes into streams
    (Residential/Commercial/Miscellaneous)
    ↓
-Final: RevenueStream[] output with validation
+Final: RevenueStream[] output with confidence and reasoning
 ```
 
-**Note:** The current implementation uses a single `extractRevenueStreams` tool that handles both extraction and categorization in one step. This is more efficient than the multi-tool approach shown in some examples below.
+**Design Note:** The implementation uses a single `extractRevenueStreams` tool that handles both extraction and categorization in one step using `generateObject` with Zod schemas. This is more efficient and reliable than multi-tool orchestration.
 
 ## Tool Definitions
 
-**Implementation Note:** The examples below show both the actual implementation (`extractRevenueStreams`) and conceptual reference patterns for multi-tool architectures.
-
 ### Tool Design Pattern
 
-All tools follow the Vercel AI SDK pattern:
+All tools follow the Vercel AI SDK pattern with structured error handling:
 
 ```typescript
 import { tool } from "ai";
@@ -120,239 +124,120 @@ export const myTool = tool({
 });
 ```
 
-### extractRevenueRows Tool
+### extractRevenueStreams Tool (Actual Implementation)
+
+The primary tool for rent roll extraction. Uses `generateObject` for structured output:
 
 ```typescript
-export const extractRevenueRowsTool = tool({
-  description: `Extract revenue row data from parsed rent roll content.
+import { tool, generateObject } from "ai";
+import { getModel, AI_CONFIG } from "../config";
+import {
+  extractRevenueStreamsInputSchema,
+  extractRevenueStreamsOutputSchema,
+} from "./revenue-stream-types";
 
-  Identifies:
-  - Unit identifiers: apartment numbers, suite numbers, space IDs
-  - Square footage: unit SF, rentable SF
-  - Monthly rates: base rent, monthly rent amounts
-  - Annual income: yearly totals or calculated from monthly
-  - Vacancy status: occupied/vacant indicators
-  - Tenant names: lessee names, tenant info
+export const extractRevenueStreams = tool({
+  description: `Extract revenue data from rent roll documents into RevenueStream[] format.
 
-  Returns all identified rows with their data fields.
-  Does NOT categorize - that's for the categorizeRevenueStreams tool.`,
+  Call this tool with parsed document content to extract unit-level revenue data.
 
-  inputSchema: z.object({
-    content: z.string().describe("Parsed document text content"),
-    focusArea: z
-      .enum(["Residential", "Commercial", "Miscellaneous", "all"])
-      .default("all")
-      .describe("Focus extraction on specific category"),
-  }),
+  Returns:
+  - RevenueStream[]: Categorized streams (Residential/Commercial/Miscellaneous)
+  - Each stream contains RevenueRow[] with unit, sqft, rent data
+  - Confidence scores and extraction reasoning
 
-  execute: async ({ content, focusArea }) => {
-    const rows = [];
+  Best practices:
+  - Include rawText from parser output
+  - Include structuredData if available (Excel/CSV)
+  - Provide propertyTypeHint when known (improves categorization)`,
 
-    // Pattern matching for rent roll data
-    const patterns = {
-      unit: /(?:Unit|Apt|Suite|Space)\s*[#:]?\s*(\w+)/gi,
-      sqft: /(\d{3,5})\s*(?:SF|sq\.?\s*ft)/gi,
-      monthly: /\$[\d,]+(?:\.\d{2})?\s*(?:\/?\s*(?:mo|month))?/gi,
-      tenant: /Tenant:\s*([^,\n]+)/gi,
-    };
+  inputSchema: extractRevenueStreamsInputSchema,
 
-    // Extract matches - simplified example
-    // Real implementation would be more sophisticated
+  execute: async (input) => {
+    try {
+      const { rawText, structuredData, fileName, propertyTypeHint } = input;
 
-    return {
-      success: true,
-      rows,
-      totalFound: rows.length,
-      focusArea,
-    };
-  },
-});
-```
-
-### categorizeRevenueStreams Tool
-
-```typescript
-export const categorizeRevenueStreamsTool = tool({
-  description: `Categorize revenue rows into streams by property type.
-
-  Categories:
-  - RESIDENTIAL: Apartments, multifamily units, residential rentals
-  - COMMERCIAL: Office, retail, industrial, mixed-use commercial
-  - MISCELLANEOUS: Parking, storage, laundry, vending, other income
-
-  Groups rows into RevenueStream objects by category.
-  Uses commercial real estate domain knowledge for categorization.`,
-
-  inputSchema: z.object({
-    rows: z
-      .array(
-        z.object({
-          unit: z.string(),
-          squareFeet: z.number().nullable(),
-          monthlyRate: z.number().nullable(),
-          tenantName: z.string().optional(),
-          context: z.string().optional(),
-        })
-      )
-      .describe("Revenue rows to categorize"),
-  }),
-
-  execute: async ({ rows }) => {
-    const streams = {
-      Residential: [] as RevenueRow[],
-      Commercial: [] as RevenueRow[],
-      Miscellaneous: [] as RevenueRow[],
-    };
-
-    // Category hints (agent makes final decision)
-    const hints = {
-      Residential: ["apt", "unit", "bedroom", "br", "apartment", "residential"],
-      Commercial: ["suite", "office", "retail", "commercial", "floor"],
-      Miscellaneous: ["parking", "storage", "laundry", "vending", "misc"],
-    };
-
-    for (const row of rows) {
-      const unitLower = row.unit.toLowerCase();
-      let category: keyof typeof streams = "Miscellaneous";
-
-      for (const [cat, keywords] of Object.entries(hints)) {
-        if (keywords.some((kw) => unitLower.includes(kw))) {
-          category = cat as keyof typeof streams;
-          break;
-        }
+      // Handle empty input
+      if (!rawText || rawText.trim().length === 0) {
+        return {
+          success: true,
+          revenueStreams: [],
+          overallConfidence: 0,
+          reasoning: "No content to extract from document",
+          warnings: ["Document appears to be empty"],
+        };
       }
 
-      streams[category].push({
-        id: crypto.randomUUID(),
-        ...row,
-        annualIncome: row.monthlyRate ? row.monthlyRate * 12 : null,
-        isVacant: !row.tenantName,
-        operatingVacancyAndCreditLoss: 5, // Default 5%
+      // Select model based on complexity
+      const complexity = rawText.length > 10000 ? "complex" : "standard";
+      const model = getModel(complexity);
+
+      // Use generateObject for structured extraction
+      const { object } = await generateObject({
+        model,
+        schema: extractRevenueStreamsOutputSchema,
+        system: getRevenueStreamSystemPrompt(),
+        prompt: buildRevenueStreamPrompt(rawText, fileName, propertyTypeHint),
+        temperature: AI_CONFIG.temperature,
       });
-    }
 
-    return {
-      success: true,
-      streams: Object.entries(streams)
-        .filter(([_, rows]) => rows.length > 0)
-        .map(([category, rows], index) => ({
-          id: crypto.randomUUID(),
-          name: category === "Miscellaneous" ? "Other Income" : `${category} Rents`,
-          category,
-          order: index + 1,
-          rows,
-        })),
-      summary: {
-        residentialCount: streams.Residential.length,
-        commercialCount: streams.Commercial.length,
-        miscellaneousCount: streams.Miscellaneous.length,
-      },
-    };
+      return {
+        success: true,
+        revenueStreams: object.revenueStreams,
+        overallConfidence: object.overallConfidence,
+        reasoning: object.reasoning,
+        warnings: object.warnings,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        revenueStreams: [],
+        overallConfidence: 0,
+        reasoning: "",
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   },
 });
 ```
 
-### validateExtraction Tool
+### Input/Output Schemas (Zod)
+
+Located in `src/ai/tools/revenue-stream-types.ts`:
 
 ```typescript
-export const validateExtractionTool = tool({
-  description: `Validate extracted revenue streams for consistency and completeness.
+import { z } from "zod";
 
-  Checks:
-  - Sum verification (row totals match stream totals if provided)
-  - Data completeness (each row has unit + at least one value)
-  - Value reasonableness (no negative rents, realistic SF ranges)
-  - Duplicate detection (same unit appearing twice)`,
+export const revenueRowSchema = z.object({
+  id: z.string(),
+  unit: z.string(),
+  squareFeet: z.number().nullable(),
+  monthlyRate: z.number().nullable(),
+  annualIncome: z.number().nullable(),
+  isVacant: z.boolean(),
+});
 
-  inputSchema: z.object({
-    streams: z
-      .array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          category: z.enum(["Residential", "Commercial", "Miscellaneous"]),
-          rows: z.array(
-            z.object({
-              unit: z.string(),
-              squareFeet: z.number().nullable(),
-              monthlyRate: z.number().nullable(),
-              annualIncome: z.number().nullable(),
-            })
-          ),
-        })
-      )
-      .describe("The RevenueStream[] to validate"),
-    expectedTotals: z
-      .object({
-        totalGrossRevenue: z.number().optional(),
-        totalUnits: z.number().optional(),
-      })
-      .optional()
-      .describe("Expected totals from document for verification"),
-  }),
+export const revenueStreamSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.enum(["Residential", "Commercial", "Miscellaneous"]),
+  order: z.number(),
+  rows: z.array(revenueRowSchema),
+});
 
-  execute: async ({ streams, expectedTotals }) => {
-    const issues: string[] = [];
-    const warnings: string[] = [];
+export const extractRevenueStreamsInputSchema = z.object({
+  rawText: z.string().describe("Parsed document text content"),
+  structuredData: z.unknown().optional().describe("Structured data from Excel/CSV"),
+  fileName: z.string().describe("Original filename"),
+  documentTypeHint: z.string().optional(),
+  propertyTypeHint: z.string().optional(),
+});
 
-    // Calculate totals
-    let totalUnits = 0;
-    let totalGrossRevenue = 0;
-
-    for (const stream of streams) {
-      for (const row of stream.rows) {
-        totalUnits++;
-        if (row.annualIncome) {
-          totalGrossRevenue += row.annualIncome;
-        }
-
-        // Check for negative values
-        if (row.monthlyRate && row.monthlyRate < 0) {
-          issues.push(`Negative rent: ${row.unit} = $${row.monthlyRate}`);
-        }
-
-        // Check for unrealistic SF
-        if (row.squareFeet && (row.squareFeet < 50 || row.squareFeet > 100000)) {
-          warnings.push(`Unusual SF: ${row.unit} = ${row.squareFeet} SF`);
-        }
-      }
-    }
-
-    // Check completeness
-    if (totalUnits === 0) {
-      warnings.push("No revenue rows extracted");
-    }
-
-    // Verify against expected totals
-    if (expectedTotals?.totalUnits) {
-      if (totalUnits !== expectedTotals.totalUnits) {
-        issues.push(
-          `Unit count (${totalUnits}) doesn't match expected (${expectedTotals.totalUnits})`
-        );
-      }
-    }
-
-    if (expectedTotals?.totalGrossRevenue) {
-      const diff = Math.abs(totalGrossRevenue - expectedTotals.totalGrossRevenue);
-      if (diff > 1) {
-        issues.push(
-          `Revenue sum ($${totalGrossRevenue}) doesn't match expected ($${expectedTotals.totalGrossRevenue})`
-        );
-      }
-    }
-
-    return {
-      success: issues.length === 0,
-      isValid: issues.length === 0,
-      issues,
-      warnings,
-      calculations: {
-        totalUnits,
-        totalGrossRevenue,
-        streamCount: streams.length,
-      },
-    };
-  },
+export const extractRevenueStreamsOutputSchema = z.object({
+  revenueStreams: z.array(revenueStreamSchema),
+  overallConfidence: z.number().min(0).max(1),
+  reasoning: z.string(),
+  warnings: z.array(z.string()).optional(),
 });
 ```
 
@@ -363,47 +248,56 @@ export const validateExtractionTool = tool({
 Keep system prompts **under 500 tokens** (sent with every request).
 
 ```typescript
-// src/ai/prompts/extraction-prompt.ts
+// src/ai/prompts/revenue-stream-prompt.ts
 
-export function getExtractionSystemPrompt(): string {
-  return `You are a rent roll analyst specializing in commercial real estate.
+export function getRevenueStreamSystemPrompt(): string {
+  return `You are a rent roll analyst for commercial real estate. Extract unit-level revenue data into RevenueStream[] format.
 
-Your task: Extract unit-level revenue data and output RevenueStream[] format.
-
-Output structure:
+**Output Structure:**
 - RevenueStream[]: Array of categorized revenue streams
-  - Each stream has: id, name, category, rows[], totals
-  - Categories: Residential, Commercial, Miscellaneous
-- Each RevenueRow has: unit, squareFeet, monthlyRate, annualIncome, isVacant, tenantName
+  - id: Generate a unique identifier (e.g., "stream-1")
+  - name: Descriptive name (e.g., "Office Rents", "Parking")
+  - category: Residential | Commercial | Miscellaneous
+  - order: Display order starting at 1
+  - rows: Array of RevenueRow (unit-level data)
 
-Guidelines:
-1. Use tools to extract and categorize data
-2. Provide reasoning for your categorization decisions
-3. Flag any ambiguous items for review
-4. Calculate annualIncome as monthlyRate * 12
+**Categories:**
+- RESIDENTIAL: Apartments, units, multifamily, residential rentals
+- COMMERCIAL: Office, retail, industrial, flex, warehouse, medical
+- MISCELLANEOUS: Parking, storage, laundry, vending, antenna, billboard, other
 
-Be thorough but efficient. Extract all unit-level revenue data.`;
+**RevenueRow Fields:**
+- id, unit, squareFeet, monthlyRate, annualIncome, isVacant
+
+**Guidelines:**
+1. Extract ALL units/spaces from the document
+2. Group units into logical revenue streams by type
+3. Use null for missing values, not 0`;
 }
 ```
 
 ### User Prompt Template
 
 ```typescript
-export function buildExtractionPrompt(content: string, fileName: string): string {
-  return `Analyze this rent roll and extract all revenue data.
+export function buildRevenueStreamPrompt(
+  content: string,
+  fileName: string,
+  propertyTypeHint?: string
+): string {
+  return `Extract all revenue data from this rent roll into RevenueStream[] format.
 
-Document: ${fileName}
+**Document:** ${fileName}
+${propertyTypeHint ? `**Property Type:** ${propertyTypeHint}` : ""}
 
-Content:
+**Content:**
 ${content}
 
-Instructions:
-1. Use extractRevenueRows to identify all unit/lease data
-2. Use categorizeRevenueStreams to group by Residential/Commercial/Miscellaneous
-3. Use validateExtraction to verify your extraction
-4. Provide reasoning for how you categorized each stream
-
-Return the complete RevenueStream[] array.`;
+**Instructions:**
+1. Identify all unit/lease records in the document
+2. Extract for each unit: unit ID, square feet, monthly rent, annual rent
+3. Determine if each unit is vacant (no tenant or no rent = vacant)
+4. Group rows into streams by category (Residential/Commercial/Miscellaneous)
+5. Provide reasoning explaining your categorization decisions`;
 }
 ```
 
@@ -575,13 +469,13 @@ describe("Revenue Extraction Agent", () => {
 
 1. **Parallel parsing**: Parse file while preparing prompts
 2. **Stream results**: Use streaming for long operations
-3. **Cache schemas**: Claude caches schemas for 24 hours
+3. **Schema validation**: Zod schemas enable structured output with `generateObject`
 
 ### Cost Optimization
 
-1. **Use Batch API**: 50% discount for non-urgent processing
-2. **Model selection**: Use Haiku for simple docs, Sonnet for complex
-3. **Prompt caching**: 90% discount on repeated prompts
+1. **Model selection**: Use Gemini Flash for simple docs, Gemini Pro for complex
+2. **Complexity detection**: Automatically choose model based on document size
+3. **Structured output**: Use `generateObject` to reduce token waste
 
 ## Debugging Agents
 

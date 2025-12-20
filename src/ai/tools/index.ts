@@ -1,49 +1,23 @@
 /**
  * AI Tools Export
  *
- * Central export point for all AI agent tools.
- * Import from here in the agent to keep code clean.
+ * Central export point for AI agent tools.
  *
  * @example
  * ```typescript
- * import { extractFinancialData, categorizeLineItems } from "@/ai/tools";
+ * import { executeRevenueStreamExtraction } from "@/ai/tools";
  *
- * // Step 1: Extract line items from parsed content
- * const extraction = await extractFinancialData.execute({
+ * const result = await executeRevenueStreamExtraction({
  *   rawText: parsedContent.rawText,
  *   structuredData: parsedContent.structuredData,
  *   fileName: "rent_roll.pdf",
  *   documentTypeHint: "rent_roll",
  * });
- *
- * // Step 2: Categorize into revenue/expense/adjustment
- * const categorization = await categorizeLineItems.execute({
- *   lineItems: extraction.lineItems,
- * });
  * ```
  */
 
 // Tool exports
-export { extractFinancialData } from "./extract-financial-data";
-export { categorizeLineItems } from "./categorize-line-items";
 export { extractRevenueStreams, executeRevenueStreamExtraction } from "./extract-revenue-streams";
-
-// Type exports
-export type {
-  // Time and category types
-  TimePeriod,
-  FinancialCategory,
-  DocumentTypeHint,
-  // Line item types
-  ExtractedLineItem,
-  CategorizedLineItem,
-  // Result types
-  ExtractionResult,
-  CategorizationResult,
-  // Input types (inferred from Zod)
-  ExtractionInput,
-  CategorizationInput,
-} from "./types";
 
 // Revenue stream type exports
 export type {
@@ -53,16 +27,6 @@ export type {
   ExtractRevenueStreamsInput,
   ExtractRevenueStreamsOutput,
 } from "./revenue-stream-types";
-
-// Schema exports (for validation or extending)
-export {
-  extractionInputSchema,
-  extractionOutputSchema,
-  extractedLineItemSchema,
-  categorizationInputSchema,
-  categorizationOutputSchema,
-  categorizedItemSchema,
-} from "./types";
 
 // Revenue stream schema exports
 export {

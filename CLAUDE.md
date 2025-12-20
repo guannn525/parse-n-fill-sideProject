@@ -25,21 +25,16 @@ src/
 ├── ai/
 │   ├── config.ts       # Gemini model configuration
 │   ├── prompts/        # System prompts
-│   │   ├── extraction-prompt.ts
 │   │   └── revenue-stream-prompt.ts
 │   └── tools/          # AI agent tools + Zod schemas
 │       ├── extract-revenue-streams.ts  # Extraction + categorization
-│       ├── revenue-stream-types.ts     # Zod schemas
-│       ├── extract-financial-data.ts
-│       └── categorize-line-items.ts
+│       └── revenue-stream-types.ts     # Zod schemas
 ├── agent/              # Revenue extraction agent
 │   └── revenue-extraction-agent.ts
-├── api/                # API handlers
-│   ├── parse-document.ts
-│   └── export-excel.ts
 └── lib/                # Shared utilities
     ├── errors.ts
-    └── constants.ts
+    ├── constants.ts
+    └── utils.ts
 ```
 
 ### Quick Reference
@@ -51,7 +46,6 @@ src/
 - **AI Tools** → `src/ai/tools/`
 - **AI Prompts** → `src/ai/prompts/`
 - **Agent Logic** → `src/agent/`
-- **API Handlers** → `src/api/`
 - **Utilities** → `src/lib/`
 
 ## Key Technologies

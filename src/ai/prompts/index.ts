@@ -1,21 +1,7 @@
 /**
  * AI Prompts Module
  *
- * Centralized exports for all AI prompts used in financial document parsing.
+ * Centralized exports for AI prompts used in revenue stream extraction.
  */
 
-export {
-  getExtractionSystemPrompt,
-  buildExtractionPrompt,
-} from './extraction-prompt';
-
-export {
-  getCategorizationSystemPrompt,
-  buildCategorizationPrompt,
-  type LineItem,
-} from './categorization-prompt';
-
-export {
-  getRevenueStreamSystemPrompt,
-  buildRevenueStreamPrompt,
-} from './revenue-stream-prompt';
+export { getRevenueStreamSystemPrompt, buildRevenueStreamPrompt } from "./revenue-stream-prompt";
