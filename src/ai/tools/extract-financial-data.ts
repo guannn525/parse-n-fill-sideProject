@@ -15,18 +15,10 @@
  * - "Get revenue and expense items from this P&L"
  */
 
-import { tool, generateObject } from "ai";
+import { tool, generateObject, type LanguageModel } from "ai";
 import { getModel, AI_CONFIG } from "../config";
-import {
-  getExtractionSystemPrompt,
-  buildExtractionPrompt,
-} from "../prompts/extraction-prompt";
-import type {
-  ExtractionResult,
-  ExtractedLineItem,
-  TimePeriod,
-  ExtractionInput,
-} from "./types";
+import { getExtractionSystemPrompt, buildExtractionPrompt } from "../prompts/extraction-prompt";
+import type { ExtractionResult, ExtractedLineItem, TimePeriod, ExtractionInput } from "./types";
 import { extractionInputSchema, extractionOutputSchema } from "./types";
 
 /**
@@ -80,9 +72,8 @@ Best practices:
       const model = getModel(complexity);
 
       // Use generateObject for structured extraction with Zod validation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { object: extraction } = await generateObject({
-        model: model as any, // Type compatibility with AI SDK versions
+        model: model as unknown as LanguageModel, // Type compatibility: LanguageModelV1 -> LanguageModel
         schema: extractionOutputSchema,
         system: systemPrompt,
         prompt: userPrompt,
@@ -90,12 +81,10 @@ Best practices:
       });
 
       // Validate and normalize results
-      const lineItems: ExtractedLineItem[] = extraction.lineItems.map(
-        (item) => ({
-          ...item,
-          originalPeriod: item.originalPeriod as TimePeriod,
-        })
-      );
+      const lineItems: ExtractedLineItem[] = extraction.lineItems.map((item) => ({
+        ...item,
+        originalPeriod: item.originalPeriod as TimePeriod,
+      }));
 
       return {
         success: true,
@@ -106,8 +95,7 @@ Best practices:
       };
     } catch (error) {
       // Return structured error, never throw
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown extraction error";
+      const errorMessage = error instanceof Error ? error.message : "Unknown extraction error";
 
       return {
         success: false,

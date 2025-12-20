@@ -17,7 +17,7 @@
  */
 export interface ParsedSegment {
   /** Type of segment */
-  type: 'text' | 'reference';
+  type: "text" | "reference";
 
   /** Text content (for text segments) or value key (for reference segments) */
   content: string;
@@ -46,35 +46,35 @@ export interface SourceNotationRef {
   valueKey: string;
 
   /** Source type */
-  sourceType: 'userInput' | 'calculated' | 'sourceDocument' | 'assumption';
+  sourceType: "userInput" | "calculated" | "sourceDocument" | "assumption";
 
   /** Reference type and value */
-  refType: 'index' | 'key' | 'id';
+  refType: "index" | "key" | "id";
   refValue: string | number;
 }
 
 /**
  * Valid source types for type validation
  */
-const VALID_SOURCE_TYPES = ['userInput', 'calculated', 'sourceDocument', 'assumption'] as const;
+const VALID_SOURCE_TYPES = ["userInput", "calculated", "sourceDocument", "assumption"] as const;
 
 /**
  * Valid reference types for type validation
  */
-const VALID_REF_TYPES = ['index', 'key', 'id'] as const;
+const VALID_REF_TYPES = ["index", "key", "id"] as const;
 
 /**
  * Type guard to check if a string is a valid source type
  */
-function isValidSourceType(value: string): value is SourceNotationRef['sourceType'] {
-  return VALID_SOURCE_TYPES.includes(value as any);
+function isValidSourceType(value: string): value is SourceNotationRef["sourceType"] {
+  return (VALID_SOURCE_TYPES as readonly string[]).includes(value);
 }
 
 /**
  * Type guard to check if a string is a valid reference type
  */
-function isValidRefType(value: string): value is SourceNotationRef['refType'] {
-  return VALID_REF_TYPES.includes(value as any);
+function isValidRefType(value: string): value is SourceNotationRef["refType"] {
+  return (VALID_REF_TYPES as readonly string[]).includes(value);
 }
 
 /**
@@ -122,7 +122,7 @@ export function parseSourceNotation(text: string): ParsedSegment[] {
     // Add text before the match
     if (match.index > lastIndex) {
       segments.push({
-        type: 'text',
+        type: "text",
         content: text.slice(lastIndex, match.index),
       });
     }
@@ -131,7 +131,7 @@ export function parseSourceNotation(text: string): ParsedSegment[] {
     const [, valueKey, sourceType, refType, refValue] = match;
     if (valueKey && sourceType && refType && refValue) {
       segments.push({
-        type: 'reference',
+        type: "reference",
         content: valueKey,
         reference: {
           valueKey,
@@ -148,7 +148,7 @@ export function parseSourceNotation(text: string): ParsedSegment[] {
   // Add any remaining text
   if (lastIndex < text.length) {
     segments.push({
-      type: 'text',
+      type: "text",
       content: text.slice(lastIndex),
     });
   }
@@ -232,14 +232,14 @@ export function replaceSourceNotation(
   valueResolver: (ref: SourceNotationRef) => string
 ): string {
   return text.replace(SOURCE_NOTATION_REGEX, (_match, valueKey, sourceType, refType, refValue) => {
-    const validSourceType = isValidSourceType(sourceType) ? sourceType : 'userInput';
-    const validRefType = isValidRefType(refType) ? refType : 'key';
+    const validSourceType = isValidSourceType(sourceType) ? sourceType : "userInput";
+    const validRefType = isValidRefType(refType) ? refType : "key";
 
     const ref: SourceNotationRef = {
-      valueKey: valueKey ?? '',
+      valueKey: valueKey ?? "",
       sourceType: validSourceType,
       refType: validRefType,
-      refValue: refValue ?? '',
+      refValue: refValue ?? "",
     };
     return valueResolver(ref);
   });
@@ -260,7 +260,7 @@ export function validateSourceNotation(text: string): {
   // Check for malformed notation (partial matches)
   const partialRegex = /\$\{[^}]*$/gm;
   if (partialRegex.test(text)) {
-    errors.push('Unclosed source notation found (missing closing brace)');
+    errors.push("Unclosed source notation found (missing closing brace)");
   }
 
   // Check for invalid source types and ref types
@@ -268,11 +268,15 @@ export function validateSourceNotation(text: string): {
 
   for (const ref of refs) {
     if (!isValidSourceType(ref.sourceType)) {
-      errors.push(`Invalid source type: ${ref.sourceType}. Valid types: ${VALID_SOURCE_TYPES.join(', ')}`);
+      errors.push(
+        `Invalid source type: ${ref.sourceType}. Valid types: ${VALID_SOURCE_TYPES.join(", ")}`
+      );
     }
 
     if (!isValidRefType(ref.refType)) {
-      errors.push(`Invalid reference type: ${ref.refType}. Valid types: ${VALID_REF_TYPES.join(', ')}`);
+      errors.push(
+        `Invalid reference type: ${ref.refType}. Valid types: ${VALID_REF_TYPES.join(", ")}`
+      );
     }
   }
 
@@ -302,7 +306,7 @@ export function validateSourceNotation(text: string): {
  */
 export function buildReasoningSummary(
   template: string,
-  values: Record<string, { value: string | number } & Omit<SourceNotationRef, 'valueKey'>>
+  values: Record<string, { value: string | number } & Omit<SourceNotationRef, "valueKey">>
 ): string {
   let result = template;
 

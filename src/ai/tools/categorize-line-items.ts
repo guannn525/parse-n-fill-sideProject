@@ -15,7 +15,7 @@
  * - "Classify the extracted data for the cap rate model"
  */
 
-import { tool, generateObject } from "ai";
+import { tool, generateObject, type LanguageModel } from "ai";
 import { getModel, AI_CONFIG } from "../config";
 import {
   getCategorizationSystemPrompt,
@@ -103,9 +103,8 @@ Custom mappings can override AI categorization for specific labels.`,
       const model = getModel("standard");
 
       // Use generateObject for structured categorization with Zod validation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { object: categorization } = await generateObject({
-        model: model as any, // Type compatibility with AI SDK versions
+        model: model as unknown as LanguageModel, // Type compatibility: LanguageModelV1 -> LanguageModel
         schema: categorizationOutputSchema,
         system: systemPrompt,
         prompt: userPrompt,
@@ -113,17 +112,15 @@ Custom mappings can override AI categorization for specific labels.`,
       });
 
       // Merge with original extraction data and apply custom mappings
-      const categorizedItems: CategorizedLineItem[] =
-        categorization.categorizedItems.map((catItem) => {
+      const categorizedItems: CategorizedLineItem[] = categorization.categorizedItems.map(
+        (catItem) => {
           // Find original item to preserve extraction metadata
           const original = lineItems.find((li) => li.label === catItem.label);
 
           // Apply custom mapping if exists (overrides AI decision)
           let finalCategory = catItem.category as FinancialCategory;
           if (customMappings && customMappings[catItem.label]) {
-            finalCategory = customMappings[
-              catItem.label
-            ] as FinancialCategory;
+            finalCategory = customMappings[catItem.label] as FinancialCategory;
           }
 
           return {
@@ -142,7 +139,8 @@ Custom mappings can override AI categorization for specific labels.`,
             categorizationReasoning: catItem.categorizationReasoning,
             flags: catItem.flags,
           };
-        });
+        }
+      );
 
       // Separate items flagged for review
       const flaggedForReview = categorizedItems.filter(
@@ -151,13 +149,9 @@ Custom mappings can override AI categorization for specific labels.`,
 
       // Calculate summary counts
       const summary = {
-        revenueCount: categorizedItems.filter((i) => i.category === "revenue")
-          .length,
-        expenseCount: categorizedItems.filter((i) => i.category === "expense")
-          .length,
-        adjustmentCount: categorizedItems.filter(
-          (i) => i.category === "adjustment"
-        ).length,
+        revenueCount: categorizedItems.filter((i) => i.category === "revenue").length,
+        expenseCount: categorizedItems.filter((i) => i.category === "expense").length,
+        adjustmentCount: categorizedItems.filter((i) => i.category === "adjustment").length,
       };
 
       return {
@@ -169,8 +163,7 @@ Custom mappings can override AI categorization for specific labels.`,
       };
     } catch (error) {
       // Return structured error, never throw
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown categorization error";
+      const errorMessage = error instanceof Error ? error.message : "Unknown categorization error";
 
       return {
         success: false,

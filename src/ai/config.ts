@@ -11,7 +11,7 @@ import { google } from "@ai-sdk/google";
  * Model identifiers for Gemini API
  */
 const MODEL_IDS = {
-  FLASH: "gemini-2.0-flash-exp",
+  FLASH: "gemini-3-flash-preview",
   PRO: "gemini-2.0-pro-exp",
 } as const;
 

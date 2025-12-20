@@ -55,7 +55,7 @@ export function buildRevenueStreamPrompt(
   fileName: string,
   propertyTypeHint?: string
 ): string {
-  let prompt = `Extract all revenue data from this rent roll into RevenueStream[] format.
+  const prompt = `Extract all revenue data from this rent roll into RevenueStream[] format.
 
 **Document:** ${fileName}
 ${propertyTypeHint && propertyTypeHint !== "unknown" ? `**Property Type:** ${propertyTypeHint}` : ""}

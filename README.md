@@ -1,13 +1,13 @@
 # PARSE-N-FILL
 
-A modular rent roll parsing API powered by Claude AI. Parse financial documents and extract structured revenue streams for commercial real estate income-approach analysis.
+A modular rent roll parsing API powered by Gemini AI. Parse financial documents and extract structured revenue streams for commercial real estate income-approach analysis.
 
 ## Overview
 
 PARSE-N-FILL is a standalone API module designed to:
 
 1. **Parse** rent rolls and financial documents (PDF, Excel, CSV, images)
-2. **Extract** unit-level revenue data using Claude AI vision and reasoning
+2. **Extract** unit-level revenue data using Gemini AI vision and reasoning
 3. **Categorize** revenue into Residential, Commercial, and Miscellaneous streams
 4. **Output** structured RevenueStream[] JSON compatible with income-approach workflows
 5. **Export** to Excel with unit-level breakdown and totals
@@ -19,12 +19,12 @@ The core output structure for income-approach revenue analysis:
 ```typescript
 interface RevenueStream {
   id: string;
-  name: string;                     // "Office Rents", "Parking", etc.
-  category: 'Residential' | 'Commercial' | 'Miscellaneous';
+  name: string; // "Office Rents", "Parking", etc.
+  category: "Residential" | "Commercial" | "Miscellaneous";
   notes?: string;
   order: number;
   rows: RevenueRow[];
-  vacancyRate?: number;             // 0-100
+  vacancyRate?: number; // 0-100
   totals?: {
     grossRevenue: number;
     effectiveRevenue: number;
@@ -34,10 +34,10 @@ interface RevenueStream {
 
 interface RevenueRow {
   id: string;
-  unit: string;                     // "Apt 1A", "Suite 200"
+  unit: string; // "Apt 1A", "Suite 200"
   squareFeet: number | null;
   monthlyRate: number | null;
-  annualIncome: number | null;      // monthlyRate * 12
+  annualIncome: number | null; // monthlyRate * 12
   effectiveAnnualIncome: number | null;
   isVacant: boolean;
   operatingVacancyAndCreditLoss: number;
@@ -139,16 +139,16 @@ Create a `.env` file:
 cp .env.example .env
 ```
 
-Add your Anthropic API key:
+Add your Google API key:
 
 ```
-ANTHROPIC_API_KEY=your_api_key_here
+GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
 ```
 
 ### Usage
 
 ```typescript
-import { parseDocument, exportToExcel } from 'parse-n-fill';
+import { parseDocument, exportToExcel } from "parse-n-fill";
 
 // Parse a rent roll document
 const result = await parseDocument({
@@ -169,23 +169,23 @@ const excelBuffer = await exportToExcel(result.revenueStreams);
 
 ## Tech Stack
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| AI Model | Claude Sonnet 4.5 | Document parsing & reasoning |
-| AI SDK | Vercel AI SDK + @ai-sdk/anthropic | API integration |
-| File Parsing | ExcelJS, PapaParse | Excel/CSV processing |
-| Validation | Zod | Schema validation |
-| Testing | Vitest | Unit & integration tests |
-| Language | TypeScript (strict) | Type safety |
+| Component    | Technology                     | Purpose                      |
+| ------------ | ------------------------------ | ---------------------------- |
+| AI Model     | Gemini Flash 2.0               | Document parsing & reasoning |
+| AI SDK       | Vercel AI SDK + @ai-sdk/google | API integration              |
+| File Parsing | ExcelJS, PapaParse             | Excel/CSV processing         |
+| Validation   | Zod                            | Schema validation            |
+| Testing      | Vitest                         | Unit & integration tests     |
+| Language     | TypeScript (strict)            | Type safety                  |
 
 ## Supported File Types
 
-| Type | Extension | Parsing Method |
-|------|-----------|----------------|
-| PDF | .pdf | Claude vision (base64) |
-| Excel | .xlsx, .xls | ExcelJS + PapaParse |
-| CSV | .csv | PapaParse |
-| Images | .png, .jpg, .webp | Claude vision (OCR) |
+| Type   | Extension         | Parsing Method         |
+| ------ | ----------------- | ---------------------- |
+| PDF    | .pdf              | Gemini vision (base64) |
+| Excel  | .xlsx, .xls       | ExcelJS + PapaParse    |
+| CSV    | .csv              | PapaParse              |
+| Images | .png, .jpg, .webp | Gemini vision (OCR)    |
 
 ## API Reference
 
@@ -195,11 +195,11 @@ Parse a rent roll or financial document and extract revenue streams.
 
 ```typescript
 interface ParseOptions {
-  fileName: string;      // Original filename
-  fileType: string;      // MIME type
-  fileData: string;      // Base64-encoded content
+  fileName: string; // Original filename
+  fileType: string; // MIME type
+  fileData: string; // Base64-encoded content
   options?: {
-    includeRawText?: boolean;  // Include raw extracted text
+    includeRawText?: boolean; // Include raw extracted text
   };
 }
 
@@ -245,7 +245,7 @@ parse-n-fill/
 │   ├── schemas/        # Zod validation schemas
 │   ├── parsers/        # File parsing utilities (PDF, Excel, CSV, Image)
 │   ├── ai/
-│   │   ├── config.ts   # Claude model config
+│   │   ├── config.ts   # Gemini model config
 │   │   ├── prompts/    # System prompts for revenue extraction
 │   │   └── tools/      # AI agent tools (extract, categorize)
 │   ├── agent/          # Revenue extraction agent
@@ -273,17 +273,33 @@ npm run typecheck
 npm run build
 ```
 
+## CLI Testing
+
+Test extraction from the command line:
+
+```bash
+npx tsx scripts/extract.ts <file-path> [property-type]
+```
+
+Example:
+
+```bash
+npx tsx scripts/extract.ts ./rent-roll.pdf residential
+```
+
+Output is saved to `output/<filename>.json`
+
 ## Cost Estimation
 
-Using Claude Sonnet 4.5 with Batch API:
+Using Gemini Flash 2.0:
 
-| Volume | Cost/Month | Per Document |
-|--------|------------|--------------|
-| 100 docs | ~$0.38 | $0.0038 |
-| 1,000 docs | ~$3.75 | $0.0038 |
-| 10,000 docs | ~$37.50 | $0.0038 |
+| Volume      | Cost/Month | Per Document |
+| ----------- | ---------- | ------------ |
+| 100 docs    | ~$0.15     | $0.0015      |
+| 1,000 docs  | ~$1.50     | $0.0015      |
+| 10,000 docs | ~$15.00    | $0.0015      |
 
-*Estimates based on 5-page rent roll documents with mixed text/images*
+_Estimates based on 5-page rent roll documents with mixed text/images. Gemini Flash 2.0 offers significantly lower costs compared to Claude._
 
 ## License
 

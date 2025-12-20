@@ -71,3 +71,6 @@ secrets.json
 MAP05/
 other_branch/
 parse-n-fill-sideProject/
+
+# Script output
+output/*.json
