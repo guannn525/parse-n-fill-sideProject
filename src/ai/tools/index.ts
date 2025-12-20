@@ -26,7 +26,7 @@
 // Tool exports
 export { extractFinancialData } from "./extract-financial-data";
 export { categorizeLineItems } from "./categorize-line-items";
-export { extractRevenueStreams } from "./extract-revenue-streams";
+export { extractRevenueStreams, executeRevenueStreamExtraction } from "./extract-revenue-streams";
 
 // Type exports
 export type {

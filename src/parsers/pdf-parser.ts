@@ -1,8 +1,8 @@
 /**
  * PDF Parser Module
  *
- * Parses PDF documents using Claude vision API to extract text and financial data.
- * Converts PDF buffer to base64 data URL and uses Claude's multimodal capabilities
+ * Parses PDF documents using Gemini vision API to extract text and financial data.
+ * Converts PDF buffer to base64 data URL and uses Gemini's multimodal capabilities
  * to extract structured content.
  */
 
@@ -14,7 +14,7 @@ import type { FileParser, ParserInput, ParsedContent } from "./types";
 /**
  * System prompt for PDF financial document extraction
  *
- * Instructs Claude to preserve structure and extract financial information
+ * Instructs Gemini to preserve structure and extract financial information
  * in a format suitable for downstream processing.
  */
 const PDF_EXTRACTION_PROMPT = `You are a financial document parser. Extract all text content from this PDF document with the following requirements:
@@ -51,7 +51,7 @@ Extract ALL text content from the document. Be thorough and accurate.`;
 /**
  * PDF Parser Implementation
  *
- * Uses Claude vision API to extract text and structured data from PDF documents.
+ * Uses Gemini vision API to extract text and structured data from PDF documents.
  * Supports financial document parsing with emphasis on tables and numeric data.
  *
  * @example
@@ -74,13 +74,13 @@ export const pdfParser: FileParser = {
     const startTime = Date.now();
 
     try {
-      // Convert PDF buffer to base64 data URL for Claude vision
+      // Convert PDF buffer to base64 data URL for Gemini vision
       const base64 = input.fileBuffer.toString("base64");
       const dataUrl = `data:application/pdf;base64,${base64}`;
 
-      // Call Claude with vision message to extract text
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // Call Gemini with vision message to extract text
       const result = await generateText({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         model: aiModel as any, // Type compatibility with AI SDK versions
         messages: [
           {
@@ -127,14 +127,11 @@ export const pdfParser: FileParser = {
 
       // Wrap external errors with context
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new ParseError(
-        `Failed to parse PDF document: ${errorMessage}`,
-        {
-          fileName: input.fileName,
-          fileSizeBytes: input.fileBuffer.length,
-          originalError: errorMessage,
-        }
-      );
+      throw new ParseError(`Failed to parse PDF document: ${errorMessage}`, {
+        fileName: input.fileName,
+        fileSizeBytes: input.fileBuffer.length,
+        originalError: errorMessage,
+      });
     }
   },
 };

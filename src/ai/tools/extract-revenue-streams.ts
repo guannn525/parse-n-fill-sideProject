@@ -42,9 +42,7 @@ function generateId(prefix: string, index: number): string {
 /**
  * Post-process extracted streams to ensure consistency
  */
-function postProcessStreams(
-  rawStreams: RevenueStream[]
-): RevenueStream[] {
+function postProcessStreams(rawStreams: RevenueStream[]): RevenueStream[] {
   return rawStreams.map((stream, streamIndex) => {
     // Ensure stream has an ID
     const streamId = stream.id || generateId("stream", streamIndex);
@@ -57,9 +55,7 @@ function postProcessStreams(
         ...row,
         id: rowId,
         // Ensure isVacant is set correctly
-        isVacant:
-          row.isVacant ??
-          (row.monthlyRate === null && row.annualIncome === null),
+        isVacant: row.isVacant ?? (row.monthlyRate === null && row.annualIncome === null),
       };
     });
 
@@ -73,9 +69,84 @@ function postProcessStreams(
 }
 
 /**
+ * Execute revenue stream extraction
+ *
+ * Standalone function for direct invocation (used by agent).
+ * Extracts rent roll data into categorized RevenueStream[] format.
+ */
+export async function executeRevenueStreamExtraction(
+  input: ExtractRevenueStreamsInput
+): Promise<RevenueStreamExtractionResult> {
+  const { rawText, structuredData, fileName, documentTypeHint, propertyTypeHint } = input;
+
+  try {
+    // Handle empty input
+    if (!rawText || rawText.trim().length === 0) {
+      return {
+        success: true,
+        revenueStreams: [],
+        overallConfidence: 0,
+        reasoning: "No content to extract from document",
+        warnings: ["Document appears to be empty"],
+      };
+    }
+
+    // Build prompts
+    const systemPrompt = getRevenueStreamSystemPrompt();
+    let userPrompt = buildRevenueStreamPrompt(rawText, fileName, propertyTypeHint);
+
+    // Add structured data context if available (Excel/CSV provide this)
+    if (structuredData) {
+      userPrompt += `\n\n**Structured Data (JSON):**\n\`\`\`json\n${JSON.stringify(structuredData, null, 2)}\n\`\`\``;
+    }
+
+    // Add document type context
+    if (documentTypeHint && documentTypeHint !== "unknown") {
+      userPrompt += `\n\n**Document Type:** ${documentTypeHint.replace("_", " ")}`;
+    }
+
+    // Select model based on complexity
+    const complexity = rawText.length > COMPLEX_THRESHOLD ? "complex" : "standard";
+    const model = getModel(complexity);
+
+    // Use generateObject for structured extraction with Zod validation
+    const { object: extraction } = await generateObject({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: model as any, // Type compatibility with AI SDK versions
+      schema: extractRevenueStreamsOutputSchema,
+      system: systemPrompt,
+      prompt: userPrompt,
+      temperature: AI_CONFIG.temperature,
+    });
+
+    // Post-process to ensure consistency
+    const revenueStreams = postProcessStreams(extraction.revenueStreams);
+
+    return {
+      success: true,
+      revenueStreams,
+      overallConfidence: extraction.overallConfidence,
+      reasoning: extraction.reasoning,
+      warnings: extraction.warnings,
+    };
+  } catch (error) {
+    // Return structured error, never throw
+    const errorMessage = error instanceof Error ? error.message : "Unknown extraction error";
+
+    return {
+      success: false,
+      revenueStreams: [],
+      overallConfidence: 0,
+      reasoning: "",
+      error: `Revenue stream extraction failed: ${errorMessage}`,
+    };
+  }
+}
+
+/**
  * Extract Revenue Streams Tool
  *
- * Extracts rent roll data into categorized RevenueStream[] format.
+ * Wraps executeRevenueStreamExtraction for AI SDK tool usage.
  */
 export const extractRevenueStreams = tool({
   description: `Extract revenue data from rent roll documents into RevenueStream[] format.
@@ -94,80 +165,5 @@ Best practices:
 
   inputSchema: extractRevenueStreamsInputSchema,
 
-  execute: async (
-    input: ExtractRevenueStreamsInput
-  ): Promise<RevenueStreamExtractionResult> => {
-    const {
-      rawText,
-      structuredData,
-      fileName,
-      documentTypeHint,
-      propertyTypeHint,
-    } = input;
-
-    try {
-      // Handle empty input
-      if (!rawText || rawText.trim().length === 0) {
-        return {
-          success: true,
-          revenueStreams: [],
-          overallConfidence: 0,
-          reasoning: "No content to extract from document",
-          warnings: ["Document appears to be empty"],
-        };
-      }
-
-      // Build prompts
-      const systemPrompt = getRevenueStreamSystemPrompt();
-      let userPrompt = buildRevenueStreamPrompt(rawText, fileName, propertyTypeHint);
-
-      // Add structured data context if available (Excel/CSV provide this)
-      if (structuredData) {
-        userPrompt += `\n\n**Structured Data (JSON):**\n\`\`\`json\n${JSON.stringify(structuredData, null, 2)}\n\`\`\``;
-      }
-
-      // Add document type context
-      if (documentTypeHint && documentTypeHint !== "unknown") {
-        userPrompt += `\n\n**Document Type:** ${documentTypeHint.replace("_", " ")}`;
-      }
-
-      // Select model based on complexity
-      const complexity =
-        rawText.length > COMPLEX_THRESHOLD ? "complex" : "standard";
-      const model = getModel(complexity);
-
-      // Use generateObject for structured extraction with Zod validation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { object: extraction } = await generateObject({
-        model: model as any, // Type compatibility with AI SDK versions
-        schema: extractRevenueStreamsOutputSchema,
-        system: systemPrompt,
-        prompt: userPrompt,
-        temperature: AI_CONFIG.temperature,
-      });
-
-      // Post-process to ensure consistency
-      const revenueStreams = postProcessStreams(extraction.revenueStreams);
-
-      return {
-        success: true,
-        revenueStreams,
-        overallConfidence: extraction.overallConfidence,
-        reasoning: extraction.reasoning,
-        warnings: extraction.warnings,
-      };
-    } catch (error) {
-      // Return structured error, never throw
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown extraction error";
-
-      return {
-        success: false,
-        revenueStreams: [],
-        overallConfidence: 0,
-        reasoning: "",
-        error: `Revenue stream extraction failed: ${errorMessage}`,
-      };
-    }
-  },
+  execute: executeRevenueStreamExtraction,
 });

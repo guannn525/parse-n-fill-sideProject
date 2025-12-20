@@ -127,6 +127,10 @@ export type {
   ExcelSheetData,
 } from "./parsers";
 
+// Agent Layer
+export { extractRevenueFromDocument } from "./agent";
+export type { ExtractionResult, PropertyTypeHint } from "./agent";
+
 // Utilities
 export {
   // Error classes

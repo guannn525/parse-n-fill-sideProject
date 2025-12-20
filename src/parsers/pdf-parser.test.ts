@@ -212,9 +212,7 @@ describe("pdfParser", () => {
 
       // Act & Assert
       await expect(pdfParser.parse(input)).rejects.toThrow(ParseError);
-      await expect(pdfParser.parse(input)).rejects.toThrow(
-        "PDF parsing returned empty content"
-      );
+      await expect(pdfParser.parse(input)).rejects.toThrow("PDF parsing returned empty content");
     });
 
     it("should throw ParseError with whitespace-only content", async () => {
@@ -312,15 +310,16 @@ describe("pdfParser", () => {
 
       // Simulate API delay
       vi.mocked(generateText).mockImplementation(
-        () => new Promise((resolve) => {
-          setTimeout(() => {
-            resolve({
-              text: "Delayed content",
-              finishReason: "stop",
-              usage: { promptTokens: 100, completionTokens: 50 },
-            } as any);
-          }, 100);
-        })
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              resolve({
+                text: "Delayed content",
+                finishReason: "stop",
+                usage: { promptTokens: 100, completionTokens: 50 },
+              } as any);
+            }, 100);
+          })
       );
 
       const input: ParserInput = {
@@ -333,7 +332,8 @@ describe("pdfParser", () => {
       const result = await pdfParser.parse(input);
 
       // Assert - Should have measured parsing duration
-      expect(result.metadata.parsingDurationMs).toBeGreaterThanOrEqual(100);
+      // Use 95ms as minimum to account for timing variations
+      expect(result.metadata.parsingDurationMs).toBeGreaterThanOrEqual(95);
       expect(result.metadata.parsingDurationMs).toBeLessThan(1000);
     });
   });

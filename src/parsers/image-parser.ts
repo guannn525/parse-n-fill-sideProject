@@ -1,7 +1,7 @@
 /**
  * Image Parser
  *
- * Parses image files (PNG, JPEG, WebP) using Claude vision for OCR and document understanding.
+ * Parses image files (PNG, JPEG, WebP) using Gemini vision for OCR and document understanding.
  * Optimized for financial documents with table structure preservation.
  */
 
@@ -34,7 +34,7 @@ Focus on:
 Return the extracted content in a clear, structured format that preserves the document's organization.`;
 
 /**
- * Image parser implementation using Claude vision
+ * Image parser implementation using Gemini vision
  */
 export const imageParser: FileParser = {
   supportedTypes: ["image/png", "image/jpeg", "image/webp"] as const,
@@ -43,13 +43,13 @@ export const imageParser: FileParser = {
     const { fileBuffer, fileName, mimeType } = input;
 
     try {
-      // Convert buffer to base64 data URL for Claude API
+      // Convert buffer to base64 data URL for Gemini API
       const base64 = fileBuffer.toString("base64");
       const dataUrl = `data:${mimeType};base64,${base64}`;
 
-      // Call Claude with vision message
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // Call Gemini with vision message
       const result = await generateText({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         model: aiModel as any, // Type compatibility with AI SDK versions
         messages: [
           {
@@ -81,15 +81,12 @@ export const imageParser: FileParser = {
       // Handle API errors with context
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-      throw new ParseError(
-        `Failed to parse image with Claude vision: ${errorMessage}`,
-        {
-          fileName,
-          mimeType,
-          fileSize: fileBuffer.length,
-          error: errorMessage,
-        }
-      );
+      throw new ParseError(`Failed to parse image with Gemini vision: ${errorMessage}`, {
+        fileName,
+        mimeType,
+        fileSize: fileBuffer.length,
+        error: errorMessage,
+      });
     }
   },
 };

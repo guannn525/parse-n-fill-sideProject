@@ -1,38 +1,38 @@
 /**
  * AI Configuration Module
  *
- * Configures Claude models via Vercel AI SDK for financial document parsing.
+ * Configures Gemini models via Vercel AI SDK for financial document parsing.
  * Provides model selection based on document complexity.
  */
 
-import { anthropic } from "@ai-sdk/anthropic";
+import { google } from "@ai-sdk/google";
 
 /**
- * Model identifiers for Claude API
+ * Model identifiers for Gemini API
  */
 const MODEL_IDS = {
-  SONNET_4_5: "claude-sonnet-4-20250514",
-  OPUS_4_5: "claude-opus-4-5-20251101",
+  FLASH: "gemini-2.0-flash-exp",
+  PRO: "gemini-2.0-pro-exp",
 } as const;
 
 /**
- * Validates that ANTHROPIC_API_KEY is present in environment
+ * Validates that GOOGLE_GENERATIVE_AI_API_KEY is present in environment
  * @throws {Error} If API key is missing
  */
 function validateApiKey(): void {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     throw new Error(
-      "ANTHROPIC_API_KEY environment variable is required. " +
-      "Please set it in your .env file or environment configuration."
+      "GOOGLE_GENERATIVE_AI_API_KEY environment variable is required. " +
+        "Please set it in your .env file or environment configuration."
     );
   }
 }
 
 /**
- * Gets the model ID from environment or defaults to Sonnet 4.5
+ * Gets the model ID from environment or defaults to Gemini Flash
  */
 function getModelId(): string {
-  return process.env.CLAUDE_MODEL || MODEL_IDS.SONNET_4_5;
+  return process.env.GEMINI_MODEL || MODEL_IDS.FLASH;
 }
 
 /**
@@ -54,19 +54,19 @@ export const AI_CONFIG = {
 
   /**
    * Default model for standard documents
-   * Claude Sonnet 4.5 - Fast, cost-effective, handles most documents
+   * Gemini Flash 2.0 - Fast, cost-effective, handles most documents
    */
-  defaultModel: MODEL_IDS.SONNET_4_5,
+  defaultModel: MODEL_IDS.FLASH,
 
   /**
    * Complex model for challenging documents
-   * Claude Opus 4.5 - Most capable, use for complex financial statements
+   * Gemini Pro 2.0 - Most capable, use for complex financial statements
    */
-  complexModel: MODEL_IDS.OPUS_4_5,
+  complexModel: MODEL_IDS.PRO,
 } as const;
 
 /**
- * Default AI model instance configured with Sonnet 4.5
+ * Default AI model instance configured with Gemini Flash
  * Validates API key on initialization
  *
  * @example
@@ -82,7 +82,7 @@ export const AI_CONFIG = {
  */
 export const aiModel = (() => {
   validateApiKey();
-  return anthropic(getModelId());
+  return google(getModelId());
 })();
 
 /**
@@ -94,7 +94,7 @@ export type DocumentComplexity = "standard" | "complex";
  * Gets the appropriate AI model based on document complexity
  *
  * @param complexity - Document complexity level
- * @returns Configured Anthropic model instance
+ * @returns Configured Gemini model instance
  *
  * @example
  * ```typescript
@@ -113,11 +113,9 @@ export type DocumentComplexity = "standard" | "complex";
 export function getModel(complexity: DocumentComplexity) {
   validateApiKey();
 
-  const modelId = complexity === "complex"
-    ? AI_CONFIG.complexModel
-    : AI_CONFIG.defaultModel;
+  const modelId = complexity === "complex" ? AI_CONFIG.complexModel : AI_CONFIG.defaultModel;
 
-  return anthropic(modelId);
+  return google(modelId);
 }
 
 /**

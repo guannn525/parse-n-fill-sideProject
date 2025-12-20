@@ -1,7 +1,7 @@
 {
   "name": "parse-n-fill",
   "version": "0.1.0",
-  "description": "Modular financial document parsing API powered by Claude AI",
+  "description": "Modular financial document parsing API powered by Gemini AI",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -31,7 +31,7 @@
   "keywords": [
     "financial",
     "document-parsing",
-    "claude",
+    "gemini",
     "ai",
     "direct-cap",
     "commercial-real-estate",
@@ -41,7 +41,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
     "ai": "^5.0.87",
     "exceljs": "^4.4.0",
     "papaparse": "^5.4.1",

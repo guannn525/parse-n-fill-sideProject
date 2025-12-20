@@ -32,11 +32,7 @@ describe("imageParser", () => {
 
   describe("supportedTypes", () => {
     it("should support PNG, JPEG, and WebP images", () => {
-      expect(imageParser.supportedTypes).toEqual([
-        "image/png",
-        "image/jpeg",
-        "image/webp",
-      ]);
+      expect(imageParser.supportedTypes).toEqual(["image/png", "image/jpeg", "image/webp"]);
     });
   });
 
@@ -146,7 +142,7 @@ describe("imageParser", () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ParseError);
         if (error instanceof ParseError) {
-          expect(error.message).toContain("Failed to parse image with Claude vision");
+          expect(error.message).toContain("Failed to parse image with Gemini vision");
           expect(error.message).toContain("API rate limit exceeded");
           expect(error.context).toEqual({
             fileName: "test.png",
