@@ -194,40 +194,6 @@ npm test -- --watch        # Watch mode
 npm test -- pdf-parser     # Specific file
 ```
 
-## Integration Points
-
-### other_branch Integration
-
-```typescript
-// In other_branch: src/app/api/parse-document/route.ts
-import { parseDocument } from "parse-n-fill";
-import { auth } from "@clerk/nextjs/server";
-
-export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return new Response("Unauthorized", { status: 401 });
-
-  const body = await request.json();
-  const result = await parseDocument(body);
-
-  // result.revenueStreams is compatible with SubModule.data.revenueStreams
-  return Response.json(result);
-}
-```
-
-### Mapping to other_branch Types
-
-The output RevenueStream[] format is designed to be compatible with other_branch's income-approach module:
-
-```typescript
-// PARSE-N-FILL output maps directly to other_branch types
-// other_branch: src/stores/types.ts
-
-// RevenueStream → SubModule.data.revenueStreams
-// RevenueRow → individual rows within each stream
-// category: 'Residential' | 'Commercial' | 'Miscellaneous'
-```
-
 ## Git Workflow
 
 ### Commit Format
@@ -251,28 +217,3 @@ docs(readme): update API examples
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical architecture details
 - **[AGENT_DESIGN.md](./AGENT_DESIGN.md)** - AI agent patterns and prompts
 - **[README.md](./README.md)** - Project overview and quick start
-
-## Reference Projects
-
-> **IMPORTANT: READ-ONLY REFERENCE**
->
-> The following project is included **FOR REFERENCE ONLY**. Do NOT modify, edit, or commit changes to this codebase. It is a separate production application with its own development workflow.
-
-This project adapts patterns from:
-
-- **other_branch** (`/mnt/c/PARSE-N-FILL/other_branch/`) - Reference for income-approach types and revenue stream structure
-  - Study: `src/stores/types.ts` (RevenueStream, RevenueRow interfaces)
-  - Study: `src/app/(app)/bov/_components/underwriting-tab/income-approach/` (UI structure)
-  - DO NOT EDIT - read-only reference
-
-When implementing features in PARSE-N-FILL, you may:
-
-- Read and study patterns from other_branch
-- Copy/adapt type definitions into PARSE-N-FILL
-- Reference its architecture decisions
-
-You must NOT:
-
-- Edit files in other_branch/
-- Create commits in that directory
-- Run its dev server or tests (unless explicitly asked)
