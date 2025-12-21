@@ -10,6 +10,7 @@
  * Property types: multifamily, office, retail, industrial, mixed-use, other
  */
 
+import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { parseFile } from "../src/parsers";

@@ -41,8 +41,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/google": "^2.0.51",
     "ai": "^5.0.87",
+    "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "papaparse": "^5.4.1",
     "zod": "^3.24.2"
